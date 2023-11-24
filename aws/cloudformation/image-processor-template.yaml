@@ -27,11 +27,12 @@ Resources:
       Path: /
 
   UserServiceLambda:
-    Type: 'AWS::Lambda::Function'
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: UserService
       Description: Lambda for handling user creation
       Handler: !Sub '${handler}'
       Role: !GetAtt UserServiceLambdaRole.Arn 
       Runtime: java17  
-      Code: lambdas/UserService.java
+      Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
+      #TODO: update this to point to a local zip as done https://stackoverflow.com/a/54877663
