@@ -14,6 +14,9 @@ Parameters:
     Type: String
     NoEcho: true
     MinLength: 8
+  TestIPAddress:
+    Description: "Local IP address to allow access of DB for manual testing"
+    Type: String
 
 Resources:
   UserServiceLambdaRole:
@@ -54,6 +57,16 @@ Resources:
       Runtime: java17  
       Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
 
+  MetaDataDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for MetaDataDB'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: !Ref TestIPAddress
+
   MetaDataDB:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -64,7 +77,8 @@ Resources:
       MasterUsername: !Ref MetaDataDBUsername
       MasterUserPassword: !Ref MetaDataDBPassword
       DBName: MetaDataDB
-      PubliclyAccessible: false
+      PubliclyAccessible: true
       StorageType: gp2
       EnableIAMDatabaseAuthentication: true
-
+      VPCSecurityGroups:
+        - !GetAtt MetaDataDBSecurityGroup.GroupId
