@@ -11,7 +11,7 @@ There's an s3 bucket which holds lambda code.
 aws package is used in order to update lambdas when the template is uploaded
 https://catalog.workshops.aws/cfn101/en-US/intermediate/templates/package-and-deploy
 
-aws cloudformation package --template-file image-processor-template.yaml --s3-bucket ap-northeast-1-image-processor-lambda-bucket --s3-prefix lambdas --output-template-file infastructure-packaged.template --parameters ParameterKey=MetaDataDBUsername,ParameterValue=admin ParameterKey=MetaDataDBPassword,ParameterValue=password 
+aws cloudformation package --template-file image-processor-template.yaml --s3-bucket ap-northeast-1-image-processor-lambda-bucket --s3-prefix lambdas --output-template-file infastructure-packaged.template
 
 ## Deploying templates
 Once packed we should validate infastructure.packaged.yaml
