@@ -9,13 +9,10 @@ Parameters:
     Description: "Username for the image and user metadata database admin account"
     Type: String
     MinLength: 1
-  MetaDataDBPassword:
-    Description: "Password for the image and user metadata database admin account"
+  MetaDataDBName:
     Type: String
-    NoEcho: true
-    MinLength: 8
-  TestIPAddress:
-    Description: "Local IP address to allow access of DB for manual testing"
+    Default: MetaDataDB
+  VpcId:
     Type: String
 
 Resources:
@@ -43,8 +40,15 @@ Resources:
                 Action:
                   - rds-db:connect
                 Resource: !Sub
-                  - "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${DbiResourceId}/db_user"
+                  - "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${DbiResourceId}/${MetaDataDBUsername}"
                   - DbiResourceId: !GetAtt MetaDataDB.DbiResourceId
+        - PolicyName: LambdaGetSecretPolicy
+          PolicyDocument:
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'secretsmanager:GetSecretValue'
+                  Resource: !Ref MetaDataDBCreds
       Path: "/"
 
   UserServiceLambda:
@@ -52,20 +56,40 @@ Resources:
     Properties:
       FunctionName: UserService
       Description: Lambda for handling user creation
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaToRDSSecurityGroup.GroupId
       Handler: !Sub '${handler}'
       Role: !GetAtt UserServiceLambdaRole.Arn 
       Runtime: java17  
       Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
+      Environment:
+        Variables:
+          DB_ENDPOINT_ADDRESS: !GetAtt MetaDataDB.Endpoint.Address
+          DB_NAME: !Ref MetaDataDBName
+          DB_SECRET_ARN: !Ref MetaDataDBCreds
+
+  LambdaToRDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group to allow Lambda access to RDS'
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: '0.0.0.0/0'
 
   MetaDataDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for MetaDataDB'
+      GroupDescription: 'Security group to allow access MetaDataDB'
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: !Ref TestIPAddress
+          SourceSecurityGroupId: !Ref LambdaToRDSSecurityGroup
 
   MetaDataDB:
     Type: AWS::RDS::DBInstance
@@ -74,11 +98,22 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: 8.0
-      MasterUsername: !Ref MetaDataDBUsername
-      MasterUserPassword: !Ref MetaDataDBPassword
-      DBName: MetaDataDB
-      PubliclyAccessible: true
+      MasterUsername: !Join [ '', [ '{{resolve:secretsmanager:', !Ref MetaDataDBCreds, ':SecretString:username}}' ] ]
+      MasterUserPassword: !Join [ '', [ '{{resolve:secretsmanager:', !Ref MetaDataDBCreds, ':SecretString:password}}' ] ]
+      DBName: !Ref MetaDataDBName
+      PubliclyAccessible: false
       StorageType: gp2
-      EnableIAMDatabaseAuthentication: true
+      EnableIAMDatabaseAuthentication: false
       VPCSecurityGroups:
         - !GetAtt MetaDataDBSecurityGroup.GroupId
+
+  MetaDataDBCreds:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: MetaDataDBCreds
+      Description: RDS database auto-generated user password
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${MetaDataDBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 30
+        ExcludeCharacters: '"@/\'
