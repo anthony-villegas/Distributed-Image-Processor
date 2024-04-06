@@ -14,11 +14,11 @@ https://catalog.workshops.aws/cfn101/en-US/intermediate/templates/package-and-de
 aws cloudformation package --template-file image-processor-template.yaml --s3-bucket ap-northeast-1-image-processor-lambda-bucket --s3-prefix lambdas --output-template-file infastructure-packaged.template
 
 ## Deploying templates
-Once packed we should validate infastructure.packaged.yaml
+Once packed we should validate infrastructure.packaged.yaml
 aws cloudformation validate-template --template-body file://infastructure-packaged.template
 
 We can then deploy 
-aws cloudformation deploy --template-file infastructure-packaged.template --stack-name ImageProcessorStack --region ap-northeast-1 --capabilities CAPABILITY_NAMED_IAM --parameter-overrides MetaDataDBUsername=db_user MetaDataDBPassword=password
+aws cloudformation deploy --template-file infastructure-packaged.template --stack-name ImageProcessorStack --region ap-northeast-1 --capabilities CAPABILITY_NAMED_IAM --parameter-overrides MetaDataDBUsername=db_user
 
 If anything goes wrong we have to delete then redeploy the stack
 aws cloudformation delete-stack --stack-name ImageProcessorStack 

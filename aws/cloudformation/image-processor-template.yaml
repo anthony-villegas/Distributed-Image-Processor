@@ -5,75 +5,71 @@ Parameters:
   handler:
       Default: lambdas.UserService::handleRequest
       Type: String
+
   MetaDataDBUsername:
     Description: "Username for the image and user metadata database admin account"
     Type: String
     MinLength: 1
+
   MetaDataDBName:
     Type: String
     Default: MetaDataDB
-  VpcId:
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
     Type: String
+    Default: 10.192.0.0/16
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.20.0/24
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.21.0/24
 
 Resources:
-  UserServiceLambdaRole:
-    Type: AWS::IAM::Role
+  ###### Networking ########
+  VPC:
+    Type: AWS::EC2::VPC
     Properties:
-      RoleName: UserService-lambda-role
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-            - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-              - lambda.amazonaws.com
-        Version: 2012-10-17
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSLambdaExecute
-      Policies:
-        - PolicyName: UserServiceLambdaRDSAccessPolicy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - rds-db:connect
-                Resource: !Sub
-                  - "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${DbiResourceId}/${MetaDataDBUsername}"
-                  - DbiResourceId: !GetAtt MetaDataDB.DbiResourceId
-        - PolicyName: LambdaGetSecretPolicy
-          PolicyDocument:
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - 'secretsmanager:GetSecretValue'
-                  Resource: !Ref MetaDataDBCreds
-      Path: "/"
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: false
+      EnableDnsHostnames: false
 
-  UserServiceLambda:
-    Type: AWS::Lambda::Function
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
     Properties:
-      FunctionName: UserService
-      Description: Lambda for handling user creation
-      VpcConfig:
-        SecurityGroupIds:
-          - !GetAtt LambdaToRDSSecurityGroup.GroupId
-      Handler: !Sub '${handler}'
-      Role: !GetAtt UserServiceLambdaRole.Arn 
-      Runtime: java17  
-      Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
-      Environment:
-        Variables:
-          DB_ENDPOINT_ADDRESS: !GetAtt MetaDataDB.Endpoint.Address
-          DB_NAME: !Ref MetaDataDBName
-          DB_SECRET_ARN: !Ref MetaDataDBCreds
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "Private Subnet (AZ1)"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
 
   LambdaToRDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: 'Security group to allow Lambda access to RDS'
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 3306
@@ -83,14 +79,38 @@ Resources:
   MetaDataDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group to allow access MetaDataDB'
-      VpcId: !Ref VpcId
+      GroupDescription: 'Security group to allow access RDS'
+      VpcId: !Ref VPC 
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref LambdaToRDSSecurityGroup
+  ############################
 
+  ###### Lambdas #############
+  UserServiceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: UserService
+      Description: Lambda for handling user creation
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaToRDSSecurityGroup.GroupId
+        SubnetIds:
+          - !Ref PrivateSubnet1
+      Handler: !Sub '${handler}'
+      Role: !GetAtt UserServiceLambdaRole.Arn 
+      Runtime: java17  
+      Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
+      Environment:
+        Variables:
+          DB_ENDPOINT_ADDRESS: !GetAtt MetaDataDB.Endpoint.Address
+          DB_NAME: !Ref MetaDataDBName
+          DB_SECRET_ARN: !Ref MetaDataDBCreds
+  ############################
+
+  ###### Databases ###########
   MetaDataDB:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -106,6 +126,43 @@ Resources:
       EnableIAMDatabaseAuthentication: false
       VPCSecurityGroups:
         - !GetAtt MetaDataDBSecurityGroup.GroupId
+      DBSubnetGroupName: !Ref DBSubnetGroup
+  ############################
+
+  ###### IAM and Secrets #####
+  UserServiceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: UserService-lambda-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AWSLambdaExecute, arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole]
+      Policies:
+        - PolicyName: UserServiceLambdaRDSAccessPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-db:connect
+                Resource: !Sub
+                  - "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${DbiResourceId}/${MetaDataDBUsername}"
+                  - DbiResourceId: !GetAtt MetaDataDB.DbiResourceId
+        - PolicyName: LambdaGetSecretPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Ref MetaDataDBCreds
+      Path: "/"
 
   MetaDataDBCreds:
     Type: AWS::SecretsManager::Secret
@@ -117,3 +174,4 @@ Resources:
         GenerateStringKey: "password"
         PasswordLength: 30
         ExcludeCharacters: '"@/\'
+  ############################
