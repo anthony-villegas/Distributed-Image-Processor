@@ -45,10 +45,6 @@ Resources:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [ 0, !GetAZs  '' ]
       CidrBlock: !Ref PrivateSubnet1CIDR
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: "Private Subnet (AZ1)"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
