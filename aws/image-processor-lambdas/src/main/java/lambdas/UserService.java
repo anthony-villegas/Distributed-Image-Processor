@@ -1,71 +1,72 @@
 package lambdas;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
-import com.amazonaws.services.secretsmanager.AWSSecretsManager;
-import com.amazonaws.services.secretsmanager.AWSSecretsManagerClientBuilder;
-import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
-import com.amazonaws.services.secretsmanager.model.GetSecretValueResult;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.amazonaws.secretsmanager.caching.SecretCache;
+import helpers.DatabaseCredentialsManager;
+import org.jdbi.v3.core.statement.Query;
+import org.jdbi.v3.core.statement.Update;
+import org.json.JSONObject;
+import org.jdbi.v3.core.Jdbi;
 
-public class UserService implements RequestHandler<Object, String> {
-    private final SecretCache cache  = new SecretCache();
+import java.util.List;
+
+public class UserService implements RequestHandler<JSONObject, List>{
     private final String dbUrl = System.getenv("DB_ENDPOINT_ADDRESS");
     private final String secretArn = System.getenv("DB_SECRET_ARN");
-    @Override
-    public String handleRequest(Object input, Context context) {
+
+    private final DatabaseCredentialsManager credentialsManager = new DatabaseCredentialsManager(secretArn);
+
+    public class User {
+        private String username;
+        private String password;
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+    }
+    public List handleRequest(JSONObject input, Context context) {
 
         // Retrieve database credentials from AWS Secrets Manager
+        DatabaseCredentialsManager.Credentials credentials = credentialsManager.getSecretCredentials();
 
-        String username = null;
-        String password = null;
+        Jdbi jdbi = Jdbi.create(dbUrl, credentials.username(), credentials.password());
 
+        // Extract inputted username and password
+        String username = input.getString("username");
+        String password = input.getString("password");
 
-        final String secret  = cache.getSecretString(secretArn);
-        return secret;
+        context.getLogger().log("Received username: " + username);
+        context.getLogger().log("Received password: " + password);
 
-        /*
-        AWSSecretsManager client = AWSSecretsManagerClientBuilder.standard().build();
-        GetSecretValueRequest request = new GetSecretValueRequest().withSecretId(secretArn);
-        GetSecretValueResult result = client.getSecretValue(request);
+        // Create table and insert inputted value
+        jdbi.useHandle(handle -> {
+            handle.execute("CREATE TABLE users (username VARCHAR(50), password VARCHAR(50))");
+            Update update = handle.createUpdate("INSERT INTO user (username, password) VALUES (:username, :password)");
+            update.bind("username", username);
+            update.bind("password", password);
+            update.execute();
+        });
 
-        if (result.getSecretString() != null) {
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode jsonNode = objectMapper.readTree(result.getSecretString());
-            username = jsonNode.get("username").asText();
-            password = jsonNode.get("password").asText();
-        }
+        // Query table for inputted value
+        List<User> users = jdbi.withHandle(handle -> {
 
-        try (Connection conn = DriverManager.getConnection(dbUrl, username, password)) {
-            // Create a query
-            String query = "SELECT * FROM your_table";
+            return handle.createQuery("SELECT * FROM user")
+                    .mapToBean(User.class)
+                    .list();
+        });
 
-            try (PreparedStatement stmt = conn.prepareStatement(query)) {
-                // Execute the query
-                try (ResultSet rs = stmt.executeQuery()) {
-                    // Process the results
-                    while (rs.next()) {
-                        // Process each row
-                        String rowData = rs.getString("column_name");
-                        System.out.println(rowData);
-                    }
-                }
-            }
-            return "Query executed successfully";
-        } catch (SQLException e) {
-            // Handle any SQL errors
-            e.printStackTrace();
-            return "An error occurred: " + e.getMessage();
-        }
-
-         */
+        return users;
     }
 }
