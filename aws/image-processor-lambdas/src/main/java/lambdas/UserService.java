@@ -61,7 +61,6 @@ public class UserService implements RequestHandler<JSONObject, List>{
 
         // Query table for inputted value
         List<User> users = jdbi.withHandle(handle -> {
-
             return handle.createQuery("SELECT * FROM user")
                     .mapToBean(User.class)
                     .list();

@@ -36,8 +36,8 @@ Resources:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCIDR
-      EnableDnsSupport: false
-      EnableDnsHostnames: false
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -61,16 +61,25 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
 
-  LambdaToRDSSecurityGroup:
+  UserServiceLambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group to allow Lambda access to RDS'
+      GroupDescription: 'Security group to allow Lambda access to RDS and connection to secret manager'
       VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCIDR
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCIDR
 
   MetaDataDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -81,7 +90,30 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref LambdaToRDSSecurityGroup
+          SourceSecurityGroupId: !Ref UserServiceLambdaSecurityGroup
+
+  UserServiceSecretManagerVPCEndpoint:
+    Type: "AWS::EC2::VPCEndpoint"
+    Properties:
+      VpcEndpointType: "Interface"
+      VpcId: !GetAtt PrivateSubnet1.VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
+      PolicyDocument: |
+        {
+          "Statement": [
+            {
+              "Action": "*", 
+              "Effect": "Allow", 
+              "Principal": "*", 
+              "Resource": "*"
+            }
+          ]
+        }
+      SubnetIds:
+        - !Ref PrivateSubnet1
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref UserServiceLambdaSecurityGroup
   ############################
 
   ###### Lambdas #############
@@ -92,12 +124,13 @@ Resources:
       Description: Lambda for handling user creation
       VpcConfig:
         SecurityGroupIds:
-          - !GetAtt LambdaToRDSSecurityGroup.GroupId
+          - !Ref UserServiceLambdaSecurityGroup
         SubnetIds:
           - !Ref PrivateSubnet1
       Handler: !Sub '${handler}'
       Role: !GetAtt UserServiceLambdaRole.Arn 
-      Runtime: java17  
+      Runtime: java17
+      Timeout: 120
       Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
       Environment:
         Variables:
