@@ -137,6 +137,7 @@ Resources:
           DB_ENDPOINT_ADDRESS: !GetAtt MetaDataDB.Endpoint.Address
           DB_NAME: !Ref MetaDataDBName
           DB_SECRET_ARN: !Ref MetaDataDBCreds
+          REGION: !Ref AWS::Region
   ############################
 
   ###### Databases ###########
@@ -144,6 +145,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       AllocatedStorage: 20
+      BackupRetentionPeriod: 0
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: 8.0
