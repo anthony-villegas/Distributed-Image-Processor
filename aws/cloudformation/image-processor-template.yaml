@@ -136,8 +136,7 @@ Resources:
         Variables:
           DB_ENDPOINT_ADDRESS: !GetAtt MetaDataDB.Endpoint.Address
           DB_NAME: !Ref MetaDataDBName
-          DB_SECRET_ARN: !Ref MetaDataDBCreds
-          REGION: !Ref AWS::Region
+          DB_SECRET_NAME: !Ref MetaDataDBCreds
   ############################
 
   ###### Databases ###########
@@ -191,14 +190,15 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - 'secretsmanager:GetSecretValue'
+                  - "secretsmanager:GetSecretValue"
+                  - "secretsmanager:DescribeSecret"
+                  - "secretsmanager:ListSecrets"
                 Resource: !Ref MetaDataDBCreds
       Path: "/"
 
   MetaDataDBCreds:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: MetaDataDBCreds
       Description: RDS database auto-generated user password
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${MetaDataDBUsername}"}'

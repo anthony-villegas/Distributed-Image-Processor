@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # Generate jar for Lambdas
-#mvn clean package
+cd ../image-processor-lambdas/ || exit
+mvn clean package
+cd ../cloudformation/ || exit
 
 # Run AWS CloudFormation package
 aws cloudformation package --template-file image-processor-template.yaml --s3-bucket ap-northeast-1-image-processor-lambda-bucket --s3-prefix lambdas --output-template-file infastructure-packaged.template
