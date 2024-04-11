@@ -22,13 +22,12 @@ public class UserService implements RequestHandler<User, List<User>>{
     private static final Jdbi jdbi = Jdbi.create(dataSource);
 
     public List<User> handleRequest(User input, Context context) {
-        context.getLogger().log("Received username: " + input.getUsername());
-        context.getLogger().log("\nReceived password: " + input.getPassword());
+        context.getLogger().log("Creating user: " + input.getUsername());
+        generateSchema();
 
-        // Create table and insert inputted value
+        // Insert inputted value
         jdbi.useHandle(handle -> {
-            handle.execute("CREATE TABLE user (username VARCHAR(50), password VARCHAR(50))");
-            Update update = handle.createUpdate("INSERT INTO user (username, password) VALUES (:username, :password)");
+            Update update = handle.createUpdate("INSERT INTO user (Username, Password) VALUES (:username, :password)");
             update.bind("username", input.getUsername());
             update.bind("password", input.getPassword());
             update.execute();
@@ -51,6 +50,28 @@ public class UserService implements RequestHandler<User, List<User>>{
         config.setUsername(credentials.username());
         config.setPassword(credentials.password());
         return new HikariDataSource(config);
+    }
+
+    private void generateSchema() {
+        // Create tables if not yet present
+        jdbi.useHandle(handle -> {
+            handle.execute(
+                    "CREATE TABLE IF NOT EXISTS user (" +
+                            "UserID INT AUTO_INCREMENT PRIMARY KEY NOT NULL," +
+                            "Username VARCHAR(255) UNIQUE NOT NULL," +
+                            "Password VARCHAR(255) NOT NULL" +
+                            ");"
+            );
+            handle.execute(
+                    "CREATE TABLE IF NOT EXISTS image (" +
+                            "ImageID INT AUTO_INCREMENT PRIMARY KEY NOT NULL," +
+                            "UserID INT NOT NULL," +
+                            "ImageURL VARCHAR(1024) NOT NULL," +
+                            "UploadDate TIMESTAMP NOT NULL," +
+                            "FOREIGN KEY (UserID) REFERENCES user(UserID)" +
+                            ");"
+            );
+        });
     }
     public void cleanup() {
         dataSource.close(); // Close the HikariDataSource
