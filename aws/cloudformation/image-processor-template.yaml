@@ -159,6 +159,62 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
   ############################
 
+  ###### API Gateway #########
+  ImageProcessorApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: ImageProcessorApi
+
+  UserResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ParentId: !GetAtt ImageProcessorApiGateway.RootResourceId
+      PathPart: users
+
+  CreateUserMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ResourceId: !Ref UserResource
+      HttpMethod: POST
+      RequestValidatorId: !Ref CreateUserValidator
+      AuthorizationType: NONE
+      RequestModels:
+        application/json: !Ref CreateUserModel
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserServiceLambda.Arn}/invocations"
+
+  CreateUserValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: CreateUserValidator
+      RestApiId: !Ref ImageProcessorApiGateway
+      ValidateRequestBody: true
+      ValidateRequestParameters: true
+
+  CreateUserModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ContentType: "application/json"
+      Name: "CreateUserModel"
+      Schema:
+        type: object
+        properties:
+          username:
+            type: string
+          password:
+            type: string
+        required:
+          - username
+          - password
+
+  ############################
+
   ###### IAM and Secrets #####
   UserServiceLambdaRole:
     Type: AWS::IAM::Role
@@ -205,4 +261,27 @@ Resources:
         GenerateStringKey: "password"
         PasswordLength: 30
         ExcludeCharacters: '"@/\'
+
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt UserServiceLambda.Arn
   ############################
