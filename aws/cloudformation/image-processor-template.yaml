@@ -172,36 +172,36 @@ Resources:
       ParentId: !GetAtt ImageProcessorApiGateway.RootResourceId
       PathPart: users
 
-  CreateUserMethod:
+  UserMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref ImageProcessorApiGateway
       ResourceId: !Ref UserResource
-      HttpMethod: POST
-      RequestValidatorId: !Ref CreateUserValidator
-      AuthorizationType: NONE
+      HttpMethod: ANY
+      RequestValidatorId: !Ref UserValidator
+      AuthorizationType: AWS_IAM
       RequestModels:
-        application/json: !Ref CreateUserModel
+        application/json: !Ref UserModel
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Credentials: !GetAtt ApiGatewayIamRole.Arn
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserServiceLambda.Arn}/invocations"
 
-  CreateUserValidator:
+  UserValidator:
     Type: AWS::ApiGateway::RequestValidator
     Properties:
-      Name: CreateUserValidator
+      Name: UserValidator
       RestApiId: !Ref ImageProcessorApiGateway
       ValidateRequestBody: true
       ValidateRequestParameters: true
 
-  CreateUserModel:
+  UserModel:
     Type: AWS::ApiGateway::Model
     Properties:
       RestApiId: !Ref ImageProcessorApiGateway
       ContentType: "application/json"
-      Name: "CreateUserModel"
+      Name: "UserModel"
       Schema:
         type: object
         properties:
