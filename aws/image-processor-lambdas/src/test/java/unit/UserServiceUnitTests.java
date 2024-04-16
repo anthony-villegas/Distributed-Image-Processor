@@ -4,6 +4,7 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import helpers.ErrorCode;
+import helpers.ResponseMessage;
 import lambdas.UserService;
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
@@ -43,13 +44,7 @@ public class UserServiceUnitTests {
         UserService userService = new UserService(jdbi);
 
         // Mock the database interaction
-        when(jdbi.withHandle(any())).thenAnswer(invocation -> {
-            Handle handle = mock(Handle.class);
-            Update update = mock(Update.class);
-            when(update.execute()).thenReturn(1); // Simulate successful insertion
-            when(handle.createUpdate(anyString())).thenReturn(update);
-            return update;
-        });
+        when(jdbi.withHandle(any())).thenAnswer(invocation -> true);
 
         // Create a request with HTTP method POST and user data
         APIGatewayProxyRequestEvent request = createUserRequest(POST, USER1, PASSWORD1);
@@ -59,7 +54,7 @@ public class UserServiceUnitTests {
 
         // Verify that the user was created successfully
         assertEquals(201, response.getStatusCode());
-        assertEquals("User created successfully", response.getBody());
+        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
     }
 
     @Test
@@ -104,7 +99,7 @@ public class UserServiceUnitTests {
 
         // Verify that the response indicates successful user deletion
         assertEquals(200, response.getStatusCode());
-        assertEquals("User deleted successfully", response.getBody());
+        assertEquals(ResponseMessage.USER_DELETED_SUCCESSFULLY, response.getBody());
     }
 
     @Test
