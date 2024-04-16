@@ -7,6 +7,8 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import helpers.DatabaseCredentialsManager;
+import helpers.ErrorCode;
+import helpers.ResponseMessage;
 import org.jdbi.v3.core.statement.Update;
 import org.jdbi.v3.core.Jdbi;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,7 +42,7 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
              user = objectMapper.readValue(request.getBody(), User.class);
         } catch (Exception e) {
             context.getLogger().log("Error deserializing user: " + e.getMessage());
-            return createErrorResponse(400, "Invalid user format");
+            return createErrorResponse(400, ErrorCode.INVALID_USER_FORMAT);
         }
 
         switch (request.getHttpMethod()) {
@@ -49,7 +51,7 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
             case "DELETE":
                 return deleteUser(user, context);
             default:
-                return createErrorResponse(400, "Method not allowed");
+                return createErrorResponse(400, ErrorCode.METHOD_NOT_ALLOWED);
         }
     }
 
@@ -63,10 +65,10 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
                 update.bind("password", user.getPassword());
                 update.execute();
             });
-            return createSuccessResponse(201, "User created successfully");
+            return createSuccessResponse(201, ResponseMessage.USER_CREATED_SUCCESSFULLY);
         } catch(Exception e) {
             context.getLogger().log("Error processing POST request" + e.getMessage());
-            return createErrorResponse(500, "Error processing POST request");
+            return createErrorResponse(500, ErrorCode.ERROR_PROCESSING_POST_REQUEST);
         }
     }
 
@@ -83,7 +85,7 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
             );
 
             if (!userExistsAndPasswordCorrect) {
-                return createErrorResponse(403, "User not found or incorrect password");
+                return createErrorResponse(403, ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD);
             }
 
             // Delete the user
@@ -93,10 +95,10 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
                         .execute()
             );
 
-            return createSuccessResponse(200, "User deleted successfully");
+            return createSuccessResponse(200, ResponseMessage.USER_DELETED_SUCCESSFULLY);
         } catch(Exception e) {
             context.getLogger().log("Error processing DELETE request" + e.getMessage());
-            return createErrorResponse(500, "Error processing DELETE request");
+            return createErrorResponse(500, ErrorCode.ERROR_PROCESSING_DELETE_REQUEST);
         }
     }
 
@@ -121,15 +123,6 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
         config.setUsername(credentials.username());
         config.setPassword(credentials.password());
         return new HikariDataSource(config);
-    }
-
-    private boolean isValidUser(User user) {
-        // Perform validation logic here
-        if (user.getUsername() == null || user.getPassword() == null) {
-            return false;
-        }
-
-        return true;
     }
 
     private void generateSchema() {

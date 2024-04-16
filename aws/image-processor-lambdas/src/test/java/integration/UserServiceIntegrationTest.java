@@ -1,19 +1,22 @@
-package lambdas;
+package integration;
 
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.zaxxer.hikari.HikariDataSource;
+import helpers.ErrorCode;
+import helpers.ResponseMessage;
+import lambdas.UserService;
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import resources.MockLambdaLogger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class UserServiceTest {
+class UserServiceIntegrationTest {
     private static Jdbi jdbi;
     private final String USER1 = "USER1";
     private final String USER2 = "USER2";
@@ -58,7 +61,7 @@ class UserServiceTest {
 
         // Verify that the user was created successfully
         assertEquals(201, response.getStatusCode());
-        assertEquals("User created successfully", response.getBody());
+        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
     }
 
     @Test
@@ -78,12 +81,12 @@ class UserServiceTest {
 
         // Verify that the user was created successfully
         assertEquals(201, response.getStatusCode());
-        assertEquals("User created successfully", response.getBody());
+        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
 
         // Try to create the same user again
         response = userService.handleRequest(request, context);
         assertEquals(500, response.getStatusCode());
-        assertEquals("Error processing POST request", response.getBody());
+        assertEquals(ErrorCode.ERROR_PROCESSING_POST_REQUEST, response.getBody());
     }
 
     @Test
@@ -103,7 +106,7 @@ class UserServiceTest {
 
         // Verify that the user was created successfully
         assertEquals(201, response.getStatusCode());
-        assertEquals("User created successfully", response.getBody());
+        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
 
         // Create a different user
         APIGatewayProxyRequestEvent request2 = createUserRequest(POST, USER2, PASSWORD1);
@@ -111,7 +114,7 @@ class UserServiceTest {
 
         // Verify that the user was created successfully
         assertEquals(201, response2.getStatusCode());
-        assertEquals("User created successfully", response2.getBody());
+        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response2.getBody());
     }
 
     @Test
@@ -131,7 +134,7 @@ class UserServiceTest {
 
         // Verify that the user was created successfully
         assertEquals(201, response.getStatusCode());
-        assertEquals("User created successfully", response.getBody());
+        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
 
         // Define request to delete created user
         request.setHttpMethod(DELETE);
@@ -139,7 +142,7 @@ class UserServiceTest {
         // Invoke deletion
         response = userService.handleRequest(request, context);
         assertEquals(200, response.getStatusCode());
-        assertEquals("User deleted successfully", response.getBody());
+        assertEquals(ResponseMessage.USER_DELETED_SUCCESSFULLY, response.getBody());
     }
 
     @Test
@@ -159,7 +162,7 @@ class UserServiceTest {
 
         // User deletion fails due to user not existing
         assertEquals(403, response.getStatusCode());
-        assertEquals("User not found or incorrect password", response.getBody());
+        assertEquals(ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD, response.getBody());
     }
 
     @Test
@@ -179,7 +182,7 @@ class UserServiceTest {
 
         // Verify that the user was created successfully
         assertEquals(201, response.getStatusCode());
-        assertEquals("User created successfully", response.getBody());
+        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
 
         // Define request to delete created user but with wrong password
         request = createUserRequest(DELETE, USER1,PASSWORD2);
@@ -187,71 +190,7 @@ class UserServiceTest {
         // Invoke deletion
         response = userService.handleRequest(request, context);
         assertEquals(403, response.getStatusCode());
-        assertEquals("User not found or incorrect password", response.getBody());
-    }
-
-    @Test
-    public void testDeserializeUser_ValidRequest() {
-        // Create a UserService instance
-        UserService userService = new UserService(jdbi);
-
-        // Mock Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Create a JSON request with a valid user object
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setBody(String.format("{\"username\":\"%s\",\"password\":\"%s\"}", USER1, PASSWORD1));
-        request.setHttpMethod(POST);
-
-        // Invoke the handleRequest method to deserialize the request
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the deserialization was successful
-        assertEquals(201, response.getStatusCode());
-        assertEquals("User created successfully", response.getBody());
-    }
-
-    @Test
-    public void testDeserializeUser_InvalidRequest() {
-        // Create a UserService instance
-        UserService userService = new UserService(jdbi);
-
-        // Mock Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Create a JSON request with invalid data
-        String requestBody = "{\"invalid\":\"data\"}";
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setBody(requestBody);
-        request.setHttpMethod(POST);
-
-        // Invoke the handleRequest method to deserialize the request
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the deserialization failed gracefully
-        assertEquals(400, response.getStatusCode());
-        assertEquals("Invalid user format", response.getBody());
-    }
-
-    @Test
-    public void testUserService_InvalidMethod() {
-        UserService userService = new UserService(jdbi);
-
-        // Mock Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Define request for user creation
-        APIGatewayProxyRequestEvent request = createUserRequest(PUT, USER1, PASSWORD1);
-
-        // Invoke user creation
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that invalid method was gracefully rejected
-        assertEquals(400, response.getStatusCode());
-        assertEquals("Method not allowed", response.getBody());
+        assertEquals(ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD, response.getBody());
     }
 
     private APIGatewayProxyRequestEvent createUserRequest(String httpMethod, String username, String password) {
@@ -259,11 +198,5 @@ class UserServiceTest {
         request.setHttpMethod(httpMethod);
         request.setBody(String.format("{\"username\":\"%s\",\"password\":\"%s\"}", username, password));
         return request;
-    }
-    public static class MockLambdaLogger implements LambdaLogger {
-        @Override
-        public void log(String message) {}
-        @Override
-        public void log(byte[] bytes) {}
     }
 }
