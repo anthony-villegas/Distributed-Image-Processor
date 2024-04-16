@@ -16,14 +16,22 @@ import schemas.User;
 import java.util.Collections;
 
 public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent>{
-    private static final String secretName = System.getenv("DB_SECRET_NAME");
-    private static final HikariDataSource dataSource = initializeHikari(
-            new DatabaseCredentialsManager(secretName).getSecretCredentials(),
-            System.getenv("DB_ENDPOINT_ADDRESS"),
-            System.getenv("DB_NAME")
-    );
-    private static final Jdbi jdbi = Jdbi.create(dataSource);
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private static Jdbi jdbi;
+
+    public UserService(Jdbi jdbi) {
+        UserService.jdbi = jdbi;
+    }
+
+    public UserService() {
+        String secretName = System.getenv("DB_SECRET_NAME");
+        HikariDataSource dataSource = initializeHikari(
+                new DatabaseCredentialsManager(secretName).getSecretCredentials(),
+                System.getenv("DB_ENDPOINT_ADDRESS"),
+                System.getenv("DB_NAME")
+        );
+        UserService.jdbi = Jdbi.create(dataSource);
+    }
 
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context){
         User user;
@@ -31,7 +39,8 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
         try {
              user = objectMapper.readValue(request.getBody(), User.class);
         } catch (Exception e) {
-            return createErrorResponse(400, "Error deserializing user: " + e.getMessage());
+            context.getLogger().log("Error deserializing user: " + e.getMessage());
+            return createErrorResponse(400, "Invalid user format");
         }
 
         switch (request.getHttpMethod()) {
@@ -56,25 +65,38 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
             });
             return createSuccessResponse(201, "User created successfully");
         } catch(Exception e) {
-            return createErrorResponse(500, "Error processing POST request: " + e.getMessage());
+            context.getLogger().log("Error processing POST request" + e.getMessage());
+            return createErrorResponse(500, "Error processing POST request");
         }
     }
 
     private APIGatewayProxyResponseEvent deleteUser(User user, Context context) {
         try {
-            context.getLogger().log("Deleting user: " + user.getUsername());
-            int rowsAffected = jdbi.withHandle(handle ->
-                handle.createUpdate("DELETE FROM user WHERE username = :username AND password = :password")
+            // Check if the user exists and verify the password
+            boolean userExistsAndPasswordCorrect = jdbi.withHandle(handle ->
+                    handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
+                            .bind("username", user.getUsername())
+                            .bind("password", user.getPassword())
+                            .mapTo(Integer.class)
+                            .findFirst()
+                            .orElse(0) > 0
+            );
+
+            if (!userExistsAndPasswordCorrect) {
+                return createErrorResponse(403, "User not found or incorrect password");
+            }
+
+            // Delete the user
+            jdbi.withHandle(handle ->
+                handle.createUpdate("DELETE FROM user WHERE username = :username")
                         .bind("username", user.getUsername())
-                        .bind("password", user.getPassword())
                         .execute()
             );
-            if (rowsAffected == 0) {
-                return createErrorResponse(404, "User for deletion not found");
-            }
+
             return createSuccessResponse(200, "User deleted successfully");
         } catch(Exception e) {
-            return createErrorResponse(500, "Error processing DELETE request: " + e.getMessage());
+            context.getLogger().log("Error processing DELETE request" + e.getMessage());
+            return createErrorResponse(500, "Error processing DELETE request");
         }
     }
 
@@ -101,6 +123,15 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
         return new HikariDataSource(config);
     }
 
+    private boolean isValidUser(User user) {
+        // Perform validation logic here
+        if (user.getUsername() == null || user.getPassword() == null) {
+            return false;
+        }
+
+        return true;
+    }
+
     private void generateSchema() {
         // Create tables if not yet present
         jdbi.useHandle(handle -> {
@@ -121,8 +152,5 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
                             ");"
             );
         });
-    }
-    public void cleanup() {
-        dataSource.close(); // Close the HikariDataSource
     }
 }
