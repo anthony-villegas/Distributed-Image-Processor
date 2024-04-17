@@ -8,9 +8,10 @@ aws cloudformation deploy --stack-name LambdaBucketStack --template-file ./lambd
 ## Updating lambdas
 There's an s3 bucket which holds lambda code. 
 
-aws package is used in order to update lambdas when the template is uploaded
+aws package is used in order to update lambdas when the template is uploaded. We first need to package everything into a jar to be uploaded to s3.
 https://catalog.workshops.aws/cfn101/en-US/intermediate/templates/package-and-deploy
 
+mvn clean package
 aws cloudformation package --template-file image-processor-template.yaml --s3-bucket ap-northeast-1-image-processor-lambda-bucket --s3-prefix lambdas --output-template-file infastructure-packaged.template
 
 ## Deploying templates
