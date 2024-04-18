@@ -130,18 +130,18 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
         jdbi.useHandle(handle -> {
             handle.execute(
                     "CREATE TABLE IF NOT EXISTS user (" +
-                            "UserID INT AUTO_INCREMENT PRIMARY KEY NOT NULL," +
+                            "UserID SMALLINT UNSIGNED AUTO_INCREMENT PRIMARY KEY NOT NULL," +
                             "Username VARCHAR(255) UNIQUE NOT NULL," +
                             "Password VARCHAR(255) NOT NULL" +
                             ");"
             );
             handle.execute(
                     "CREATE TABLE IF NOT EXISTS image (" +
-                            "ImageID INT AUTO_INCREMENT PRIMARY KEY NOT NULL," +
-                            "UserID INT NOT NULL," +
+                            "UserID SMALLINT UNSIGNED NOT NULL," +
                             "ImageURL VARCHAR(1024) NOT NULL," +
                             "UploadDate TIMESTAMP NOT NULL," +
-                            "FOREIGN KEY (UserID) REFERENCES user(UserID)" +
+                            "CONSTRAINT pk_image PRIMARY KEY (ImageURL)," +
+                            "CONSTRAINT fk_user_ID FOREIGN KEY (UserID) REFERENCES user(UserID)" +
                             ");"
             );
         });
