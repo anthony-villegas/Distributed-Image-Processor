@@ -137,11 +137,10 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
             );
             handle.execute(
                     "CREATE TABLE IF NOT EXISTS image (" +
-                            "UserID SMALLINT UNSIGNED NOT NULL," +
+                            "UserID SMALLINT UNSIGNED PRIMARY KEY NOT NULL," +
                             "ImageURL VARCHAR(1024) NOT NULL," +
                             "UploadDate TIMESTAMP NOT NULL," +
-                            "CONSTRAINT pk_image PRIMARY KEY (ImageURL)," +
-                            "CONSTRAINT fk_user_ID FOREIGN KEY (UserID) REFERENCES user(UserID)" +
+                            "FOREIGN KEY (UserID) REFERENCES user(UserID)" +
                             ");"
             );
         });
