@@ -38,7 +38,7 @@ jobs:
       - name: Deploy CloudFormation stack
         run: |
           cd ./aws/cloudformation/
-          aws cloudformation deploy --template-file cloudformation/infrastructure-packaged.template --stack-name ImageProcessorStack --region ap-northeast-1 --capabilities CAPABILITY_NAMED_IAM --parameter-overrides MetaDataDBUsername=db_user
+          aws cloudformation deploy --template-file infrastructure-packaged.template --stack-name ImageProcessorStack --region ap-northeast-1 --capabilities CAPABILITY_NAMED_IAM --parameter-overrides MetaDataDBUsername=db_user
       - name: Run integration tests
         run: |
           cd ./aws/image-processor-lambdas/
