@@ -29,12 +29,12 @@ jobs:
           mvn clean package
       - name: Package CloudFormation template
         run: |
-          cd ../cloudformation/
+          cd ./aws/cloudformation/
           aws cloudformation package --template-file image-processor-template.yaml --s3-bucket ap-northeast-1-image-processor-lambda-bucket --s3-prefix lambdas --output-template-file infrastructure-packaged.template
       - name: Deploy CloudFormation stack
         run: |
           aws cloudformation deploy --template-file cloudformation/infrastructure-packaged.template --stack-name ImageProcessorStack --region ap-northeast-1 --capabilities CAPABILITY_NAMED_IAM --parameter-overrides MetaDataDBUsername=db_user
       - name: Run integration tests
         run: |
-          cd ../image-processor-lambdas/
+          cd ./aws/image-processor-lambdas/
           mvn failsafe:integration-test
