@@ -1,0 +1,298 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Infrastructure for distributed image processing task scheduler'
+
+Parameters:
+  handler:
+      Default: lambdas.UserService::handleRequest
+      Type: String
+
+  MetaDataDBUsername:
+    Description: "Username for the image and user metadata database admin account"
+    Type: String
+    MinLength: 1
+
+  MetaDataDBName:
+    Type: String
+    Default: MetaDataDB
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.20.0/24
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.21.0/24
+
+Resources:
+  ###### Networking ########
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  UserServiceLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group to allow Lambda access to RDS and connection to secret manager'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCIDR
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCIDR
+
+  MetaDataDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group to allow access RDS'
+      VpcId: !Ref VPC 
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref UserServiceLambdaSecurityGroup
+
+  UserServiceSecretManagerVPCEndpoint:
+    Type: "AWS::EC2::VPCEndpoint"
+    Properties:
+      VpcEndpointType: "Interface"
+      VpcId: !GetAtt PrivateSubnet1.VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
+      PolicyDocument: |
+        {
+          "Statement": [
+            {
+              "Action": "*", 
+              "Effect": "Allow", 
+              "Principal": "*", 
+              "Resource": "*"
+            }
+          ]
+        }
+      SubnetIds:
+        - !Ref PrivateSubnet1
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref UserServiceLambdaSecurityGroup
+  ############################
+
+  ###### Lambdas #############
+  UserServiceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: UserService
+      Description: Lambda for handling user creation
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref UserServiceLambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+      Handler: !Sub '${handler}'
+      Role: !GetAtt UserServiceLambdaRole.Arn 
+      Runtime: java17
+      Timeout: 120
+      Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
+      Environment:
+        Variables:
+          DB_ENDPOINT_ADDRESS: !GetAtt MetaDataDB.Endpoint.Address
+          DB_NAME: !Ref MetaDataDBName
+          DB_SECRET_NAME: !Ref MetaDataDBCreds
+  ############################
+
+  ###### Databases ###########
+  MetaDataDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: 20
+      BackupRetentionPeriod: 0
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: 8.0
+      MasterUsername: !Join [ '', [ '{{resolve:secretsmanager:', !Ref MetaDataDBCreds, ':SecretString:username}}' ] ]
+      MasterUserPassword: !Join [ '', [ '{{resolve:secretsmanager:', !Ref MetaDataDBCreds, ':SecretString:password}}' ] ]
+      DBName: !Ref MetaDataDBName
+      PubliclyAccessible: false
+      StorageType: gp2
+      EnableIAMDatabaseAuthentication: false
+      VPCSecurityGroups:
+        - !GetAtt MetaDataDBSecurityGroup.GroupId
+      DBSubnetGroupName: !Ref DBSubnetGroup
+  ############################
+
+  ###### API Gateway #########
+  ImageProcessorApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: ImageProcessorApi
+
+  UserResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ParentId: !GetAtt ImageProcessorApiGateway.RootResourceId
+      PathPart: users
+
+  UserMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ResourceId: !Ref UserResource
+      HttpMethod: ANY
+      RequestValidatorId: !Ref UserValidator
+      AuthorizationType: AWS_IAM
+      RequestModels:
+        application/json: !Ref UserModel
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserServiceLambda.Arn}/invocations"
+
+  UserValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: UserValidator
+      RestApiId: !Ref ImageProcessorApiGateway
+      ValidateRequestBody: true
+      ValidateRequestParameters: true
+
+  UserModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ContentType: "application/json"
+      Name: "UserModel"
+      Schema:
+        type: object
+        properties:
+          username:
+            type: string
+          password:
+            type: string
+        required:
+          - username
+          - password
+
+  ############################
+
+  ###### IAM and Secrets #####
+  UserServiceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: UserService-lambda-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AWSLambdaExecute, arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole]
+      Policies:
+        - PolicyName: UserServiceLambdaRDSAccessPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-db:connect
+                Resource: !Sub
+                  - "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${DbiResourceId}/${MetaDataDBUsername}"
+                  - DbiResourceId: !GetAtt MetaDataDB.DbiResourceId
+        - PolicyName: LambdaGetSecretPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                  - "secretsmanager:DescribeSecret"
+                  - "secretsmanager:ListSecrets"
+                Resource: !Ref MetaDataDBCreds
+      Path: "/"
+
+  MetaDataDBCreds:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: RDS database auto-generated user password
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${MetaDataDBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 30
+        ExcludeCharacters: '"@/\'
+
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt UserServiceLambda.Arn
+  ############################
+
+Outputs:
+  MetaDataDBSecretName:
+    Value: !Ref MetaDataDBCreds
+  MetaDataDBEndpointAddress:
+    Value: !GetAtt MetaDataDB.Endpoint.Address
+  MetaDataDBName:
+    Value: !Ref MetaDataDBName
+  Region:
+    Value: !Sub "${AWS::Region}"
+

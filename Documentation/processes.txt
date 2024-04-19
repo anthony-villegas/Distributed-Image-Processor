@@ -1,0 +1,25 @@
+## Environment Setup
+Java is used with intellij and maven. Dependencies can be found in pom.xml
+setup guide can be found here: https://www.youtube.com/watch?v=MaHxZEBRcT4
+
+We need to have an s3 bucket deployed which will hold the lambdas. A template is present for this purpose.
+aws cloudformation deploy --stack-name LambdaBucketStack --template-file ./lambda-bucket-template.yaml 
+
+## Updating lambdas
+There's an s3 bucket which holds lambda code. 
+
+aws package is used in order to update lambdas when the template is uploaded. We first need to package everything into a jar to be uploaded to s3.
+https://catalog.workshops.aws/cfn101/en-US/intermediate/templates/package-and-deploy
+
+mvn clean package
+aws cloudformation package --template-file image-processor-template.yaml --s3-bucket ap-northeast-1-image-processor-lambda-bucket --s3-prefix lambdas --output-template-file infastructure-packaged.template
+
+## Deploying templates
+Once packed we should validate infrastructure.packaged.yaml
+aws cloudformation validate-template --template-body file://infastructure-packaged.template
+
+We can then deploy 
+aws cloudformation deploy --template-file infastructure-packaged.template --stack-name ImageProcessorStack --region ap-northeast-1 --capabilities CAPABILITY_NAMED_IAM --parameter-overrides MetaDataDBUsername=db_user
+
+If anything goes wrong we have to delete then redeploy the stack
+aws cloudformation delete-stack --stack-name ImageProcessorStack 
