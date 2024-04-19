@@ -12,11 +12,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import resources.MockLambdaLogger;
+import resources.UserServiceResponse;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class UserServiceIntegrationTest {
+class UserServiceLocalIntegrationTests {
     private static Jdbi jdbi;
     private final String USER1 = "USER1";
     private final String USER2 = "USER2";
@@ -62,6 +63,17 @@ class UserServiceIntegrationTest {
         // Verify that the user was created successfully
         assertEquals(201, response.getStatusCode());
         assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
+
+        // Verify user is present in database
+        boolean userExistsAndPasswordCorrect = jdbi.withHandle(handle ->
+                handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
+                        .bind("username", USER1)
+                        .bind("password", PASSWORD1)
+                        .mapTo(Integer.class)
+                        .findFirst()
+                        .orElse(0) > 0
+        );
+        assertTrue(userExistsAndPasswordCorrect);
     }
 
     @Test
@@ -87,6 +99,18 @@ class UserServiceIntegrationTest {
         response = userService.handleRequest(request, context);
         assertEquals(500, response.getStatusCode());
         assertEquals(ErrorCode.ERROR_PROCESSING_POST_REQUEST, response.getBody());
+
+        // Verify only single user with given credentials is present
+        int numUsers = jdbi.withHandle(handle -> {
+                return handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
+                        .bind("username", USER1)
+                        .bind("password", PASSWORD1)
+                        .mapTo(Integer.class)
+                        .findFirst()
+                        .orElse(0);
+                }
+        );
+        assertEquals(1, numUsers);
     }
 
     @Test
@@ -115,6 +139,16 @@ class UserServiceIntegrationTest {
         // Verify that the user was created successfully
         assertEquals(201, response2.getStatusCode());
         assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response2.getBody());
+
+        // Verify two users are present
+        int numUsers = jdbi.withHandle(handle -> {
+                    return handle.createQuery("SELECT COUNT(*) FROM user")
+                            .mapTo(Integer.class)
+                            .findFirst()
+                            .orElse(0);
+                }
+        );
+        assertEquals(2, numUsers);
     }
 
     @Test
@@ -143,6 +177,17 @@ class UserServiceIntegrationTest {
         response = userService.handleRequest(request, context);
         assertEquals(200, response.getStatusCode());
         assertEquals(ResponseMessage.USER_DELETED_SUCCESSFULLY, response.getBody());
+
+        // Verify user has been removed
+        boolean userExistsAndPasswordCorrect = jdbi.withHandle(handle ->
+                handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
+                        .bind("username", USER1)
+                        .bind("password", PASSWORD1)
+                        .mapTo(Integer.class)
+                        .findFirst()
+                        .orElse(0) > 0
+        );
+        assertFalse(userExistsAndPasswordCorrect);
     }
 
     @Test
@@ -191,6 +236,18 @@ class UserServiceIntegrationTest {
         response = userService.handleRequest(request, context);
         assertEquals(403, response.getStatusCode());
         assertEquals(ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD, response.getBody());
+
+        // Verify user has not been deleted
+        int numUsers = jdbi.withHandle(handle -> {
+                    return handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
+                            .bind("username", USER1)
+                            .bind("password", PASSWORD1)
+                            .mapTo(Integer.class)
+                            .findFirst()
+                            .orElse(0);
+                }
+        );
+        assertEquals(1, numUsers);
     }
 
     private APIGatewayProxyRequestEvent createUserRequest(String httpMethod, String username, String password) {

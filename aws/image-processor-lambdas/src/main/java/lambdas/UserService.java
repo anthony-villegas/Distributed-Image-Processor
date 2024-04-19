@@ -4,7 +4,6 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import helpers.DatabaseCredentialsManager;
 import helpers.ErrorCode;
@@ -16,6 +15,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import schemas.User;
 
 import java.util.Collections;
+
+import static helpers.DatabaseHelper.initializeHikari;
 
 public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent>{
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -114,15 +115,6 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
                 .withStatusCode(statusCode)
                 .withHeaders(Collections.singletonMap("Content-Type", "text/plain"))
                 .withBody(errorMessage);
-    }
-
-    private static HikariDataSource initializeHikari(DatabaseCredentialsManager.Credentials credentials, String dbEndpoint, String dbName) {
-        // Initialize HikariDataSource
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:mysql://" + dbEndpoint + ":3306/" + dbName);
-        config.setUsername(credentials.username());
-        config.setPassword(credentials.password());
-        return new HikariDataSource(config);
     }
 
     private void generateSchema() {

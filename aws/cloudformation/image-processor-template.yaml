@@ -285,3 +285,14 @@ Resources:
                 Action: 'lambda:*'
                 Resource: !GetAtt UserServiceLambda.Arn
   ############################
+
+Outputs:
+  MetaDataDBSecretName:
+    Value: !Ref MetaDataDBCreds
+  MetaDataDBEndpointAddress:
+    Value: !GetAtt MetaDataDB.Endpoint.Address
+  MetaDataDBName:
+    Value: !Ref MetaDataDBName
+  Region:
+    Value: !Sub "${AWS::Region}"
+
