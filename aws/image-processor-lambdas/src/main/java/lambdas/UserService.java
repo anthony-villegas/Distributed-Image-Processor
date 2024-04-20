@@ -8,12 +8,14 @@ import com.zaxxer.hikari.HikariDataSource;
 import helpers.DatabaseCredentialsManager;
 import helpers.ErrorCode;
 import helpers.ResponseMessage;
+import helpers.UserNotFoundException;
 import org.jdbi.v3.core.statement.Update;
 import org.jdbi.v3.core.Jdbi;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import schemas.User;
 
+import java.io.IOException;
 import java.util.Collections;
 
 import static helpers.DatabaseHelper.initializeHikari;
@@ -37,35 +39,29 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
     }
 
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context){
-        User user;
-
         try {
-             user = objectMapper.readValue(request.getBody(), User.class);
-        } catch (Exception e) {
+            User user = deserializeUser(request.getBody());
+            switch (request.getHttpMethod()) {
+                case "POST":
+                    return createUser(user, context);
+                case "DELETE":
+                    return deleteUser(user, context);
+                default:
+                    return createErrorResponse(400, ErrorCode.METHOD_NOT_ALLOWED);
+            }
+        } catch (IOException e) {
             context.getLogger().log("Error deserializing user: " + e.getMessage());
             return createErrorResponse(400, ErrorCode.INVALID_USER_FORMAT);
         }
+    }
 
-        switch (request.getHttpMethod()) {
-            case "POST":
-                return createUser(user, context);
-            case "DELETE":
-                return deleteUser(user, context);
-            default:
-                return createErrorResponse(400, ErrorCode.METHOD_NOT_ALLOWED);
-        }
+    private User deserializeUser(String requestBody) throws IOException {
+        return objectMapper.readValue(requestBody, User.class);
     }
 
     private APIGatewayProxyResponseEvent createUser(User user, Context context) {
         try {
-            context.getLogger().log("Creating user: " + user.getUsername());
-            generateSchema();
-            jdbi.useHandle(handle -> {
-                Update update = handle.createUpdate("INSERT INTO user (Username, Password) VALUES (:username, :password)");
-                update.bind("username", user.getUsername());
-                update.bind("password", user.getPassword());
-                update.execute();
-            });
+            createUserInDatabase(user, context);
             return createSuccessResponse(201, ResponseMessage.USER_CREATED_SUCCESSFULLY);
         } catch(Exception e) {
             context.getLogger().log("Error processing POST request" + e.getMessage());
@@ -75,32 +71,46 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
 
     private APIGatewayProxyResponseEvent deleteUser(User user, Context context) {
         try {
-            // Check if the user exists and verify the password
-            boolean userExistsAndPasswordCorrect = jdbi.withHandle(handle ->
-                    handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
-                            .bind("username", user.getUsername())
-                            .bind("password", user.getPassword())
-                            .mapTo(Integer.class)
-                            .findFirst()
-                            .orElse(0) > 0
-            );
-
-            if (!userExistsAndPasswordCorrect) {
-                return createErrorResponse(403, ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD);
-            }
-
-            // Delete the user
-            jdbi.withHandle(handle ->
-                handle.createUpdate("DELETE FROM user WHERE username = :username")
-                        .bind("username", user.getUsername())
-                        .execute()
-            );
-
+            deleteUserInDatabase(user, context);
             return createSuccessResponse(200, ResponseMessage.USER_DELETED_SUCCESSFULLY);
+        } catch(UserNotFoundException e) {
+            return createErrorResponse(403, ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD);
         } catch(Exception e) {
             context.getLogger().log("Error processing DELETE request" + e.getMessage());
             return createErrorResponse(500, ErrorCode.ERROR_PROCESSING_DELETE_REQUEST);
         }
+    }
+
+    private void createUserInDatabase(User user, Context context) {
+        context.getLogger().log("Creating user: " + user.getUsername());
+        generateSchema();
+        jdbi.useHandle(handle -> {
+            Update update = handle.createUpdate("INSERT INTO user (Username, Password) VALUES (:username, :password)");
+            update.bind("username", user.getUsername());
+            update.bind("password", user.getPassword());
+            update.execute();
+        });
+    }
+
+    private void deleteUserInDatabase(User user, Context context) throws UserNotFoundException {
+        context.getLogger().log("Deleting user: " + user.getUsername());
+        boolean userExistsAndPasswordCorrect = jdbi.withHandle(handle ->
+                handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
+                        .bind("username", user.getUsername())
+                        .bind("password", user.getPassword())
+                        .mapTo(Integer.class)
+                        .findFirst()
+                        .orElse(0) > 0
+        );
+        if (!userExistsAndPasswordCorrect) {
+            throw new UserNotFoundException();
+        }
+        jdbi.withHandle(handle ->
+                handle.createUpdate("DELETE FROM user WHERE username = :username AND password = :password")
+                        .bind("username", user.getUsername())
+                        .bind("password", user.getPassword())
+                        .execute()
+        );
     }
 
     private APIGatewayProxyResponseEvent createSuccessResponse(int statusCode, String message) {
