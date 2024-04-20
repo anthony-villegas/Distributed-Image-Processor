@@ -16,8 +16,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import schemas.User;
 
 import java.io.IOException;
-import java.sql.SQLDataException;
-import java.sql.SQLException;
 import java.util.Collections;
 
 import static helpers.DatabaseHelper.initializeHikari;
