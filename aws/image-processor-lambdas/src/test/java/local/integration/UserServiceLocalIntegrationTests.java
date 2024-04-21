@@ -4,15 +4,14 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.zaxxer.hikari.HikariDataSource;
-import helpers.ErrorCode;
-import helpers.ResponseMessage;
+import lambdas.helpers.ErrorCode;
+import lambdas.helpers.ResponseMessage;
 import lambdas.UserService;
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import resources.MockLambdaLogger;
-import resources.UserServiceResponse;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;

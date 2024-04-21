@@ -1,4 +1,4 @@
-package helpers;
+package lambdas.helpers;
 
 public interface ResponseMessage {
     String USER_CREATED_SUCCESSFULLY = "User created successfully";
