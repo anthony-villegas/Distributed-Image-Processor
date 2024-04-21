@@ -1,4 +1,4 @@
-package helpers;
+package lambdas.helpers;
 
 import com.amazonaws.secretsmanager.caching.SecretCache;
 import com.amazonaws.services.secretsmanager.AWSSecretsManager;

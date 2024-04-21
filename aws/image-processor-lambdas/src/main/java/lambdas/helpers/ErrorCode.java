@@ -1,4 +1,4 @@
-package helpers;
+package lambdas.helpers;
 
 public interface ErrorCode {
     String INVALID_USER_FORMAT = "INVALID_USER_FORMAT";

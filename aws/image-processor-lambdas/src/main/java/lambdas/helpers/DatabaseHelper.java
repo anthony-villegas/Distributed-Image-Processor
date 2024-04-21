@@ -1,4 +1,4 @@
-package helpers;
+package lambdas.helpers;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
