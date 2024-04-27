@@ -2,21 +2,16 @@ package lambdas;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.zaxxer.hikari.HikariDataSource;
 import lambdas.actions.UserAction;
 import lambdas.helpers.DatabaseCredentialsManager;
-import lambdas.helpers.ErrorCode;
 import org.jdbi.v3.core.Jdbi;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import schemas.CognitoEvent;
 import schemas.User;
-import java.io.IOException;
-
-import static lambdas.helpers.ApiGatewayResponseHelper.createApiGatewayResponse;
 import static lambdas.helpers.DatabaseHelper.initializeHikari;
 
-public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent>{
+public class UserService implements RequestHandler<CognitoEvent, CognitoEvent>{
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static Jdbi jdbi;
 
@@ -34,21 +29,40 @@ public class UserService implements RequestHandler<APIGatewayProxyRequestEvent, 
         UserService.jdbi = Jdbi.create(dataSource);
     }
 
-    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context){
+    public CognitoEvent handleRequest(CognitoEvent cognitoEvent, Context context) {
         try {
-            User user = deserializeUser(request.getBody());
-            UserAction userAction = UserAction.createAction(request.getHttpMethod(), jdbi);
-            return userAction.doAction(user, context);
-        } catch (IOException e) {
-            context.getLogger().log("Error deserializing user: " + e.getMessage());
-            return createApiGatewayResponse(400, ErrorCode.INVALID_USER_FORMAT);
-        } catch (IllegalArgumentException e) {
-            return createApiGatewayResponse(400, ErrorCode.METHOD_NOT_ALLOWED);
+            context.getLogger().log("Handling CognitoEvent:\n" + cognitoEvent.toString());
+            validateRequest(cognitoEvent);
+            User user = deserializeUser(cognitoEvent);
+            UserAction userAction = UserAction.createAction(cognitoEvent, jdbi);
+            userAction.doAction(user, context);
+            return cognitoEvent;
+        }
+        catch (Exception e) {
+            context.getLogger().log("Error occurred: " + e.getMessage());
+            throw e;
         }
     }
 
-    private User deserializeUser(String requestBody) throws IOException {
-        return objectMapper.readValue(requestBody, User.class);
+    private void validateRequest(CognitoEvent event) {
+        if(event == null) {
+            throw new IllegalArgumentException("Cognito Event is null");
+        }
+        if(event.getTriggerSource() == null || event.getTriggerSource().isEmpty()) {
+            throw new IllegalArgumentException("Trigger Source is empty");
+        }
+        if(event.getUserName() == null || event.getUserName().isEmpty()) {
+            throw new IllegalArgumentException("Username is empty");
+        }
+        if(event.getRequest().getUserAttributes() == null || event.getRequest().getUserAttributes().getOrDefault("email", "").isEmpty()) {
+            throw new IllegalArgumentException("Email is empty");
+        }
     }
 
+    private User deserializeUser(CognitoEvent cognitoEvent) {
+        User user = new User();
+        user.setEmail(cognitoEvent.getRequest().getUserAttributes().get("email"));
+        user.setUserID(cognitoEvent.getUserName());
+        return user;
+    }
 }
