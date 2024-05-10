@@ -6,13 +6,11 @@ import com.zaxxer.hikari.HikariDataSource;
 import lambdas.actions.UserAction;
 import lambdas.helpers.DatabaseCredentialsManager;
 import org.jdbi.v3.core.Jdbi;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import schemas.CognitoEvent;
 import schemas.User;
 import static lambdas.helpers.DatabaseHelper.initializeHikari;
 
 public class UserService implements RequestHandler<CognitoEvent, CognitoEvent>{
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private static Jdbi jdbi;
 
     public UserService(Jdbi jdbi) {

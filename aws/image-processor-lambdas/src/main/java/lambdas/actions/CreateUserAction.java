@@ -35,7 +35,7 @@ public class CreateUserAction implements UserAction {
         jdbi.useHandle(handle -> {
             handle.execute(
                     "CREATE TABLE IF NOT EXISTS user (" +
-                            "UserID VARCHAR(2048) PRIMARY KEY NOT NULL," +
+                            "UserID VARCHAR(100) PRIMARY KEY NOT NULL," +
                             "Email VARCHAR(255) UNIQUE NOT NULL," +
                             "CreationDate TIMESTAMP NOT NULL" +
                             ");"
@@ -43,7 +43,7 @@ public class CreateUserAction implements UserAction {
             handle.execute(
                     "CREATE TABLE IF NOT EXISTS image (" +
                             "ImageID SMALLINT UNSIGNED AUTO_INCREMENT PRIMARY KEY NOT NULL," +
-                            "UserID VARCHAR(2048) NOT NULL," +
+                            "UserID VARCHAR(100) NOT NULL," +
                             "ImageURL VARCHAR(1024) NOT NULL," +
                             "UploadDate TIMESTAMP NOT NULL," +
                             "FOREIGN KEY (UserID) REFERENCES user(UserID)" +
