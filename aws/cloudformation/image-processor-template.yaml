@@ -2,9 +2,18 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Infrastructure for distributed image processing task scheduler'
 
 Parameters:
+  StageName:
+    Type: String
+    Default: dev
+    AllowedValues: [ dev, test, prod ]
+
   handler:
       Default: lambdas.UserService::handleRequest
       Type: String
+
+  SignedUrlServiceHandler:
+    Default: lambdas.SignedUrlService::handleRequest
+    Type: String
 
   MetaDataDBUsername:
     Description: "Username for the image and user metadata database admin account"
@@ -145,6 +154,31 @@ Resources:
       FunctionName: !GetAtt UserServiceLambda.Arn
       Principal: cognito-idp.amazonaws.com
       SourceArn: !GetAtt ImageProcessorUserPool.Arn
+
+  SignedUrlServiceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: SignedUrlService
+      Description: Lambda for generating signed urls for S3 upload
+      Handler: !Sub '${SignedUrlServiceHandler}'
+      Role: !GetAtt SignedUrlServiceLambdaRole.Arn
+      Runtime: java17
+      Timeout: 120
+      Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
+      Environment:
+        Variables:
+          IMAGE_BUCKET_NAME: ImagesS3Bucket.BucketName
+  ############################
+
+  ###### S3 ##################
+  ImagesS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName:
+        !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - '-image-processor-images-bucket'
   ############################
 
   ###### Databases ###########
@@ -170,8 +204,35 @@ Resources:
   ###### API Gateway #########
   ImageProcessorApiGateway:
     Type: AWS::ApiGateway::RestApi
+    DependsOn: ApiGatewayCloudwatchRoleArn
     Properties:
       Name: ImageProcessorApi
+
+  ApiGatewayCloudwatchRoleArn:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
+
+  ImageProcessorApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+
+  ImageProcessorApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: !Ref StageName
+      RestApiId: !Ref ImageProcessorApiGateway
+      DeploymentId: !Ref ImageProcessorApiGatewayDeployment
+      MethodSettings:
+        - HttpMethod: "*"
+          ResourcePath: "/*"
+          DataTraceEnabled: true
+          LoggingLevel: INFO
+          ThrottlingBurstLimit: 50
+          ThrottlingRateLimit: 100
+      Variables:
+        environment: !Ref StageName
 
   ImageProcessorApiGatewayAuthorizer:
     Type: AWS::ApiGateway::Authorizer
@@ -179,10 +240,60 @@ Resources:
       Name: CognitoAuthorizer
       Type: COGNITO_USER_POOLS
       RestApiId: !Ref ImageProcessorApiGateway
-      IdentitySource: method.request.header.Auth
+      IdentitySource: method.request.header.Authorization
       ProviderARNs:
         - !GetAtt ImageProcessorUserPool.Arn
 
+  SignedUrlResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ParentId: !GetAtt ImageProcessorApiGateway.RootResourceId
+      PathPart: signed-url
+
+  GetServiceUrlMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ResourceId: !Ref SignedUrlResource
+      HttpMethod: ANY
+      RequestValidatorId: !Ref ServiceUrlRequestValidator
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ImageProcessorApiGatewayAuthorizer
+      RequestModels:
+        application/json: !Ref ServiceUrlRequestModel
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SignedUrlServiceLambda.Arn}/invocations"
+
+  ServiceUrlRequestValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: ServiceUrlRequestValidator
+      RestApiId: !Ref ImageProcessorApiGateway
+      ValidateRequestBody: true
+      ValidateRequestParameters: true
+
+  ServiceUrlRequestModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId: !Ref ImageProcessorApiGateway
+      ContentType: "application/json"
+      Name: "ServiceUrlRequestModel"
+      Schema:
+        type: object
+        properties:
+          userID:
+            type: string
+          images:
+            type: array
+            items:
+              type: string
+        required:
+          - userID
+          - images
   ############################
 
   ###### IAM and Secrets #####
@@ -222,6 +333,35 @@ Resources:
                 Resource: !Ref MetaDataDBCreds
       Path: "/"
 
+  SignedUrlServiceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SignedUrlService-lambda-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3PresignedURLPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Ref ImagesS3Bucket
+                Effect: Allow
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+                Effect: Allow
+      Path: "/"
+
   MetaDataDBCreds:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -232,6 +372,7 @@ Resources:
         PasswordLength: 30
         ExcludeCharacters: '"@/\'
 
+  # IAM Role for API Gateway to invoke lambdas
   ApiGatewayIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -247,13 +388,35 @@ Resources:
               - 'sts:AssumeRole'
       Path: '/'
       Policies:
-        - PolicyName: LambdaAccess
+        - PolicyName: UserServiceLambdaAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: 'Allow'
                 Action: 'lambda:*'
                 Resource: !GetAtt UserServiceLambda.Arn
+        - PolicyName: SignedUrlServiceLambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt SignedUrlServiceLambda.Arn
+
+  # IAM Role for API Gateway + CloudWatch Logging
+  CloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Action: 'sts:AssumeRole'
+          Effect: Allow
+          Principal:
+            Service: apigateway.amazonaws.com
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
   ############################
 
   ###### Cognito ############
@@ -292,4 +455,3 @@ Outputs:
     Value: !Ref MetaDataDBName
   Region:
     Value: !Sub "${AWS::Region}"
-
