@@ -15,6 +15,10 @@ Parameters:
     Default: lambdas.SignedUrlService::handleRequest
     Type: String
 
+  CorsPreflightLambdaHandler:
+    Default: lambdas.CorsPreflightLambda::handleRequest
+    Type: String
+
   MetaDataDBUsername:
     Description: "Username for the image and user metadata database admin account"
     Type: String
@@ -168,6 +172,17 @@ Resources:
       Environment:
         Variables:
           IMAGE_BUCKET_NAME: ImagesS3Bucket.BucketName
+
+  CorsPreflightLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CorsPreflightLambda
+      Description: Lambda to return proper headers in response to CORS preflight request
+      Handler: !Sub '${CorsPreflightLambdaHandler}'
+      Role: !GetAtt CorsPreflightLambdaLambdaRole.Arn
+      Code: ../image-processor-lambdas/target/processor-lambda-1.0-SNAPSHOT.jar
+      Runtime: java17
+      Timeout: 10
   ############################
 
   ###### S3 ##################
@@ -215,6 +230,7 @@ Resources:
 
   ImageProcessorApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
+    DependsOn: GetServiceUrlMethod
     Properties:
       RestApiId: !Ref ImageProcessorApiGateway
 
@@ -256,44 +272,27 @@ Resources:
     Properties:
       RestApiId: !Ref ImageProcessorApiGateway
       ResourceId: !Ref SignedUrlResource
-      HttpMethod: ANY
-      RequestValidatorId: !Ref ServiceUrlRequestValidator
+      HttpMethod: GET
       AuthorizationType: COGNITO_USER_POOLS
       AuthorizerId: !Ref ImageProcessorApiGatewayAuthorizer
-      RequestModels:
-        application/json: !Ref ServiceUrlRequestModel
       Integration:
         Type: AWS_PROXY
-        IntegrationHttpMethod: GET
+        IntegrationHttpMethod: POST
         Credentials: !GetAtt ApiGatewayIamRole.Arn
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SignedUrlServiceLambda.Arn}/invocations"
 
-  ServiceUrlRequestValidator:
-    Type: AWS::ApiGateway::RequestValidator
-    Properties:
-      Name: ServiceUrlRequestValidator
-      RestApiId: !Ref ImageProcessorApiGateway
-      ValidateRequestBody: true
-      ValidateRequestParameters: true
-
-  ServiceUrlRequestModel:
-    Type: AWS::ApiGateway::Model
+  OptionsServiceUrlMethod:
+    Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref ImageProcessorApiGateway
-      ContentType: "application/json"
-      Name: "ServiceUrlRequestModel"
-      Schema:
-        type: object
-        properties:
-          userID:
-            type: string
-          images:
-            type: array
-            items:
-              type: string
-        required:
-          - userID
-          - images
+      ResourceId: !Ref SignedUrlResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CorsPreflightLambda.Arn}/invocations"
   ############################
 
   ###### IAM and Secrets #####
@@ -344,6 +343,7 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AWSLambdaExecute]
       Policies:
         - PolicyName: S3PresignedURLPolicy
           PolicyDocument:
@@ -361,6 +361,19 @@ Resources:
                 Resource: arn:aws:logs:*:*:*
                 Effect: Allow
       Path: "/"
+
+  CorsPreflightLambdaLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CorsPreflightLambda-lambda-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AWSLambdaExecute]
 
   MetaDataDBCreds:
     Type: AWS::SecretsManager::Secret
@@ -402,6 +415,13 @@ Resources:
               - Effect: 'Allow'
                 Action: 'lambda:*'
                 Resource: !GetAtt SignedUrlServiceLambda.Arn
+        - PolicyName: CorsPreflightLambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt CorsPreflightLambda.Arn
 
   # IAM Role for API Gateway + CloudWatch Logging
   CloudWatchRole:

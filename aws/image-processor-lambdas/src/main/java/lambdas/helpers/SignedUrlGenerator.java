@@ -1,40 +1,31 @@
 package lambdas.helpers;
 
-
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import schemas.SignedUrl;
-import schemas.SignedUrlRequest;
-import schemas.SignedUrlResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 public class SignedUrlGenerator {
     private final String bucketName;
-    private final LambdaLogger logger;
-    public SignedUrlGenerator(String bucketName, LambdaLogger logger) {
+
+    public SignedUrlGenerator(String bucketName) {
         this.bucketName = bucketName;
-        this.logger = logger;
     }
 
-    public List<SignedUrl> createSignedUrls(SignedUrlRequest signedUrlRequest) {
-        List<SignedUrl> preSignedUrls = new ArrayList<SignedUrl>();
-        for (String imageName : signedUrlRequest.getImages()) {
-            String keyName = createKeyName(signedUrlRequest.getUserID(), createUUID(), imageName);
-            String imageUrl = createSignedUrl(keyName, null);
-            preSignedUrls.add(new SignedUrl(keyName, imageUrl));
-        }
-        return preSignedUrls;
+    public SignedUrl createSignedUrl(LambdaLogger logger) {
+        String keyName = createUUID();
+        String imageUrl = createSignedUrl(keyName, null, logger);
+
+        return new SignedUrl(keyName, imageUrl);
     }
 
-    private String createSignedUrl(String keyName, Map<String, String> metadata) {
+    private String createSignedUrl(String keyName, Map<String, String> metadata, LambdaLogger logger) {
         try (S3Presigner presigner = S3Presigner.create()) {
 
             PutObjectRequest objectRequest = PutObjectRequest.builder()
@@ -58,9 +49,5 @@ public class SignedUrlGenerator {
     }
     private String createUUID() {
         return UUID.randomUUID().toString();
-    }
-
-    private String createKeyName(String userID, String UUID, String imageName) {
-        return "sources/" + userID + "/" + UUID + "/" + imageName;
     }
 }
