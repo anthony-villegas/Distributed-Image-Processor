@@ -13,41 +13,42 @@ import java.util.UUID;
 
 public class SignedUrlGenerator {
     private final String bucketName;
+    private final S3Presigner presigner;
 
     public SignedUrlGenerator(String bucketName) {
         this.bucketName = bucketName;
+        this.presigner = S3Presigner.create();
     }
 
     public SignedUrl createSignedUrl(LambdaLogger logger) {
         String keyName = createUUID();
-        String imageUrl = createSignedUrl(keyName, null, logger);
+        String imageUrl = createSignedUrl(keyName, logger);
 
         return new SignedUrl(keyName, imageUrl);
     }
 
-    private String createSignedUrl(String keyName, Map<String, String> metadata, LambdaLogger logger) {
-        try (S3Presigner presigner = S3Presigner.create()) {
+    private String createSignedUrl(String keyName, LambdaLogger logger) {
+        PutObjectRequest objectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(keyName)
+                .build();
 
-            PutObjectRequest objectRequest = PutObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(keyName)
-                    .metadata(metadata)
-                    .build();
+        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(10))
+                .putObjectRequest(objectRequest)
+                .build();
 
-            PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                    .signatureDuration(Duration.ofMinutes(10))
-                    .putObjectRequest(objectRequest)
-                    .build();
+        PresignedPutObjectRequest presignedRequest = presigner.presignPutObject(presignRequest);
+        String myURL = presignedRequest.url().toString();
+        logger.log("Presigned URL to upload a file to: " +  myURL);
+        logger.log("HTTP method: " + presignedRequest.httpRequest().method());
 
-            PresignedPutObjectRequest presignedRequest = presigner.presignPutObject(presignRequest);
-            String myURL = presignedRequest.url().toString();
-            logger.log("Presigned URL to upload a file to: " +  myURL);
-            logger.log("HTTP method: " + presignedRequest.httpRequest().method());
-
-            return presignedRequest.url().toExternalForm();
-        }
+        return presignedRequest.url().toExternalForm();
     }
     private String createUUID() {
         return UUID.randomUUID().toString();
+    }
+    public void close() {
+        presigner.close();
     }
 }
