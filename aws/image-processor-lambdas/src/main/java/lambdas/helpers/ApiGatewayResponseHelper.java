@@ -12,10 +12,10 @@ public interface ApiGatewayResponseHelper {
     }
     static APIGatewayProxyResponseEvent createApiGatewayResponse(int statusCode, String body) {
         Map<String, String> headers = Map.of(
-                "Content-Type", "application/json",
+                "Content-Type", "*/*",
                 "Access-Control-Allow-Origin", "*",
                 "Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS",
-                "Access-Control-Allow-Headers", "Content-Type,Access-Control-Allow-Headers,Authorization,X-Requested-With"
+                "Access-Control-Allow-Headers", "*"
         );
         return new APIGatewayProxyResponseEvent()
                 .withStatusCode(statusCode)
