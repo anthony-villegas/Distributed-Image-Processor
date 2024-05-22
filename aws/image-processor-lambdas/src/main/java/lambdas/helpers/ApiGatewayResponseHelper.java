@@ -2,19 +2,26 @@ package lambdas.helpers;
 
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 
-import java.util.Collections;
 import java.util.Map;
 
 public interface ApiGatewayResponseHelper {
-    static final String OPTIONS = "OPTIONS";
     static APIGatewayProxyResponseEvent createPreflightRequestApiGatewayResponse() {
-        return createApiGatewayResponse(200, null);
+        Map<String, String> headers = Map.of(
+                "Content-Type", "application/json",
+                "Access-Control-Allow-Origin", Config.frotendUrl,
+                "Access-Control-Allow-Methods", "GET, OPTIONS",
+                "Access-Control-Allow-Headers", "*"
+        );
+        return new APIGatewayProxyResponseEvent()
+                .withStatusCode(200)
+                .withHeaders(headers);
     }
     static APIGatewayProxyResponseEvent createApiGatewayResponse(int statusCode, String body) {
+
         Map<String, String> headers = Map.of(
-                "Content-Type", "*/*",
-                "Access-Control-Allow-Origin", "*",
-                "Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS",
+                "Content-Type", "application/json",
+                "Access-Control-Allow-Origin", Config.frotendUrl,
+                "Access-Control-Allow-Methods", "PUT, GET, OPTIONS",
                 "Access-Control-Allow-Headers", "*"
         );
         return new APIGatewayProxyResponseEvent()

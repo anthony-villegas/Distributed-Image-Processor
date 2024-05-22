@@ -358,7 +358,6 @@ Resources:
             Version: 2012-10-17
             Statement:
               - Action:
-                  - s3:GetObject
                   - s3:PutObject
                 Resource: !Sub "arn:aws:s3:::${ImagesS3Bucket}/*"
                 Effect: Allow
