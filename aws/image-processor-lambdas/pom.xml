@@ -58,7 +58,7 @@
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>secretsmanager</artifactId>
-      <version>2.25.26</version>
+      <version>2.25.50</version>
     </dependency>
 
     <dependency>
@@ -99,13 +99,18 @@
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>lambda</artifactId>
-      <version>2.25.31</version>
+      <version>2.25.50</version>
     </dependency>
-
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>s3</artifactId>
       <version>2.25.50</version>
+    </dependency>
+    <dependency>
+      <groupId>org.testng</groupId>
+      <artifactId>testng</artifactId>
+      <version>RELEASE</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 
@@ -120,7 +125,8 @@
           <includes>
             <include>**/UserServiceUnitTests.java</include>
             <include>**/UserServiceLocalIntegrationTests.java</include>
-            <include>**/SignedUrlResponseUnitTests.java</include>
+            <include>**/SignedUrlGeneratorUnitTests.java</include>
+            <include>**/SignedUrlServiceUnitTests.java</include>
             <!-- Add more include statements for additional unit test classes -->
           </includes>
           <skipTests>false</skipTests>

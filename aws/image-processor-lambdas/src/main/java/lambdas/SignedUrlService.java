@@ -7,6 +7,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import lambdas.helpers.SignedUrlGenerator;
 import schemas.SignedUrl;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import static lambdas.helpers.ApiGatewayResponseHelper.*;
 import static lambdas.helpers.ErrorCode.ERROR_PROCESSING_SIGNED_URL_REQUEST;
@@ -16,7 +17,7 @@ public class SignedUrlService implements RequestHandler<APIGatewayProxyRequestEv
     private final SignedUrlGenerator signedUrlGenerator;
 
     public SignedUrlService() {
-        this.signedUrlGenerator = new SignedUrlGenerator(IMAGE_BUCKET_NAME);
+        this.signedUrlGenerator = new SignedUrlGenerator(IMAGE_BUCKET_NAME, S3Presigner.create());
     }
 
     public SignedUrlService(SignedUrlGenerator signedUrlGenerator) {

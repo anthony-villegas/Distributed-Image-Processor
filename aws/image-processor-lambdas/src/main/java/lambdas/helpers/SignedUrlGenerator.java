@@ -8,16 +8,15 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.UUID;
 
 public class SignedUrlGenerator {
     private final String bucketName;
     private final S3Presigner presigner;
 
-    public SignedUrlGenerator(String bucketName) {
+    public SignedUrlGenerator(String bucketName, S3Presigner presigner) {
         this.bucketName = bucketName;
-        this.presigner = S3Presigner.create();
+        this.presigner = presigner;
     }
 
     public SignedUrl createSignedUrl(LambdaLogger logger) {
