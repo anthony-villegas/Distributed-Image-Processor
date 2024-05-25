@@ -95,9 +95,6 @@ public class UserServiceUnitTests {
         Context context = mock(Context.class);
         when(context.getLogger()).thenReturn(new MockLambdaLogger());
 
-        // Create an invalid CognitoEvent with user data
-        CognitoEvent request = createCognitoEvent(PRE_CONFIRMATION, EMAIL1, USER1);
-
         try {
             // Invoke user creation with empty CognitoEvent should fail
             userService.handleRequest(new CognitoEvent(), context);
