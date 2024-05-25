@@ -2,13 +2,13 @@ package lambdas;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import lambdas.actions.UserAction;
 import lambdas.helpers.DatabaseCredentialsManager;
 import org.jdbi.v3.core.Jdbi;
 import schemas.CognitoEvent;
 import schemas.User;
-import static lambdas.helpers.DatabaseHelper.initializeHikari;
 
 public class UserService implements RequestHandler<CognitoEvent, CognitoEvent>{
     private static Jdbi jdbi;
@@ -62,5 +62,14 @@ public class UserService implements RequestHandler<CognitoEvent, CognitoEvent>{
         user.setEmail(cognitoEvent.getRequest().getUserAttributes().get("email"));
         user.setUserID(cognitoEvent.getUserName());
         return user;
+    }
+
+    private static HikariDataSource initializeHikari(DatabaseCredentialsManager.Credentials credentials, String dbEndpoint, String dbName) {
+        // Initialize HikariDataSource
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:mysql://" + dbEndpoint + ":3306/" + dbName);
+        config.setUsername(credentials.username());
+        config.setPassword(credentials.password());
+        return new HikariDataSource(config);
     }
 }
