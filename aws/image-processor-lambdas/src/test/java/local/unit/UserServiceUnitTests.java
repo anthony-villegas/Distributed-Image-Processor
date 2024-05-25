@@ -1,29 +1,33 @@
 package local.unit;
 
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import lambdas.helpers.ErrorCode;
-import lambdas.helpers.ResponseMessage;
 import lambdas.UserService;
+import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import resources.MockLambdaLogger;
+import schemas.CognitoEvent;
+import schemas.Request;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class UserServiceUnitTests {
-    private final String USER1 = "USER1";
-    private final String USER2 = "USER2";
-    private final String PASSWORD1 = "PASSWORD1";
-    private final String PASSWORD2 = "PASSWORD2";
-    private final String POST = "POST";
-    private final String DELETE = "DELETE";
-    private final String PUT = "PUT";
+    private final String EMAIL1 = "email1@gmail.com";
+    private final String EMAIL2 = "email2@gmail.com";
+    private final String USER1 = "f784faf8-70a1-704d-bc25-34fc6853ae23";
+    private final String USER2 = "f784faf8-70a1-704d-bc25-34fc6853ae24";
+    private final String POST_CONFIRMATION = "PostConfirmation_ConfirmSignUp";
+    private final String PRE_CONFIRMATION = "PreConfirmation_ConfirmSignUp";
+
     private static Jdbi jdbi;
 
     @BeforeAll
@@ -43,83 +47,11 @@ public class UserServiceUnitTests {
         // Mock the database interaction
         when(jdbi.withHandle(any())).thenAnswer(invocation -> true);
 
-        // Create a request with HTTP method POST and user data
-        APIGatewayProxyRequestEvent request = createUserRequest(POST, USER1, PASSWORD1);
+        // Create a post confirmation CognitoEven with user data
+        CognitoEvent request = createCognitoEvent(POST_CONFIRMATION, EMAIL1, USER1);
 
         // Invoke the handleRequest method
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, contextMock);
-
-        // Verify that the user was created successfully
-        assertEquals(201, response.getStatusCode());
-        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
-    }
-
-    @Test
-    public void testCreateUser_InvalidUserFormat() {
-        // Inject the mocked Jdbi instance into UserService
-        UserService userService = new UserService(jdbi);
-
-        // Mock the Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Define request for user creation with invalid user data
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setHttpMethod("POST");
-        request.setBody("{\"invalid\":\"data\"}");
-
-        // Invoke user creation
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the response indicates an error due to invalid user format
-        assertEquals(400, response.getStatusCode());
-        assertEquals(ErrorCode.INVALID_USER_FORMAT, response.getBody());
-    }
-
-    @Test
-    public void testDeleteUser_Success() {
-        // Inject the mocked Jdbi instance into UserService
-        UserService userService = new UserService(jdbi);
-
-        // Mock the Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Define request for user deletion
-        APIGatewayProxyRequestEvent request = createUserRequest("DELETE", "existingUser", "correctPassword");
-
-        // Mock database interaction to simulate user existence and correct password verification
-        when(jdbi.withHandle(any())).thenAnswer(invocation -> true);
-
-        // Invoke user deletion
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the response indicates successful user deletion
-        assertEquals(200, response.getStatusCode());
-        assertEquals(ResponseMessage.USER_DELETED_SUCCESSFULLY, response.getBody());
-    }
-
-    @Test
-    public void testDeleteUser_UserNotFoundOrIncorrectPassword() {
-        // Inject the mocked Jdbi instance into UserService
-        UserService userService = new UserService(jdbi);
-
-        // Mock the Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Define request for user deletion
-        APIGatewayProxyRequestEvent request = createUserRequest("DELETE", "nonexistentUser", "wrongPassword");
-
-        // Mock database interaction to simulate user not found or incorrect password
-        when(jdbi.withHandle(any())).thenAnswer(invocation -> false);
-
-        // Invoke user deletion
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the response indicates an error due to user not found or incorrect password
-        assertEquals(403, response.getStatusCode());
-        assertEquals(ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD, response.getBody());
+        CognitoEvent response = userService.handleRequest(request, contextMock);
     }
 
     @Test
@@ -130,21 +62,58 @@ public class UserServiceUnitTests {
         Context context = mock(Context.class);
         when(context.getLogger()).thenReturn(new MockLambdaLogger());
 
-        // Define request for user creation
-        APIGatewayProxyRequestEvent request = createUserRequest(PUT, USER1, PASSWORD1);
+        // Create an invalid CognitoEvent with user data
+        CognitoEvent request = createCognitoEvent(PRE_CONFIRMATION, EMAIL1, USER1);
 
-        // Invoke user creation
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that invalid method was gracefully rejected
-        assertEquals(400, response.getStatusCode());
-        assertEquals(ErrorCode.METHOD_NOT_ALLOWED, response.getBody());
+        try {
+            // Invoke user creation, this should fail
+            userService.handleRequest(request, context);
+            fail();
+        } catch (Exception ignored) {}
     }
 
-    private APIGatewayProxyRequestEvent createUserRequest(String httpMethod, String username, String password) {
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setHttpMethod(httpMethod);
-        request.setBody(String.format("{\"username\":\"%s\",\"password\":\"%s\"}", username, password));
-        return request;
+    @Test
+    public void testUserService_NullInput() {
+        UserService userService = new UserService(jdbi);
+
+        // Mock Context
+        Context context = mock(Context.class);
+        when(context.getLogger()).thenReturn(new MockLambdaLogger());
+
+        try {
+            // Invoke user creation with null CognitoEven should fail
+            userService.handleRequest(null, context);
+            fail();
+        } catch (Exception ignored) {}
+    }
+
+    @Test
+    public void testUserService_EmptyInput() {
+        UserService userService = new UserService(jdbi);
+
+        // Mock Context
+        Context context = mock(Context.class);
+        when(context.getLogger()).thenReturn(new MockLambdaLogger());
+
+        // Create an invalid CognitoEvent with user data
+        CognitoEvent request = createCognitoEvent(PRE_CONFIRMATION, EMAIL1, USER1);
+
+        try {
+            // Invoke user creation with empty CognitoEvent should fail
+            userService.handleRequest(new CognitoEvent(), context);
+            fail();
+        } catch (Exception ignored) {}
+    }
+
+    private CognitoEvent createCognitoEvent(String triggerSource, String email, String username) {
+        CognitoEvent cognitoEvent = new CognitoEvent();
+        cognitoEvent.setTriggerSource(triggerSource);
+        cognitoEvent.setUserName(username);
+        Request request = new Request();
+        Map<String, String> attributeMap = new HashMap<>();
+        attributeMap.put("email", email);
+        request.setUserAttributes(attributeMap);
+        cognitoEvent.setRequest(request);
+        return cognitoEvent;
     }
 }

@@ -12,19 +12,22 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import resources.MockLambdaLogger;
+import schemas.CognitoEvent;
+import schemas.Request;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class UserServiceLocalIntegrationTests {
+    private final String EMAIL1 = "email1@gmail.com";
+    private final String EMAIL2 = "email2@gmail.com";
+    private final String USER1 = "f784faf8-70a1-704d-bc25-34fc6853ae23";
+    private final String USER2 = "f784faf8-70a1-704d-bc25-34fc6853ae24";
+    private final String POST_CONFIRMATION = "PostConfirmation_ConfirmSignUp";
     private static Jdbi jdbi;
-    private final String USER1 = "USER1";
-    private final String USER2 = "USER2";
-    private final String PASSWORD1 = "PASSWORD1";
-    private final String PASSWORD2 = "PASSWORD2";
-    private final String POST = "POST";
-    private final String DELETE = "DELETE";
-    private final String PUT = "PUT";
 
     @BeforeAll
     public static void setUp() {
@@ -54,29 +57,25 @@ class UserServiceLocalIntegrationTests {
         when(context.getLogger()).thenReturn(new MockLambdaLogger());
 
         // Define request for user creation
-        APIGatewayProxyRequestEvent request = createUserRequest(POST, USER1, PASSWORD1);
+        CognitoEvent request = createCognitoEvent(POST_CONFIRMATION, EMAIL1, USER1);
 
         // Invoke user creation
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the user was created successfully
-        assertEquals(201, response.getStatusCode());
-        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
+        userService.handleRequest(request, context);
 
         // Verify user is present in database
-        boolean userExistsAndPasswordCorrect = jdbi.withHandle(handle ->
-                handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
-                        .bind("username", USER1)
-                        .bind("password", PASSWORD1)
+        boolean userExistsAndEmailCorrect = jdbi.withHandle(handle ->
+                handle.createQuery("SELECT COUNT(*) FROM user WHERE UserID = :user_id AND Email = :email")
+                        .bind("user_id", USER1)
+                        .bind("email", EMAIL1)
                         .mapTo(Integer.class)
                         .findFirst()
                         .orElse(0) > 0
         );
-        assertTrue(userExistsAndPasswordCorrect);
+        assertTrue(userExistsAndEmailCorrect);
     }
 
     @Test
-    public void testCreateUser_DuplicateUsers() {
+    public void testCreateUser_Failure_DuplicateUsers() {
         // Inject the in-memory database connection into UserService
         UserService userService = new UserService(jdbi);
 
@@ -85,35 +84,32 @@ class UserServiceLocalIntegrationTests {
         when(context.getLogger()).thenReturn(new MockLambdaLogger());
 
         // Define request for user creation
-        APIGatewayProxyRequestEvent request = createUserRequest(POST, USER1, PASSWORD1);
+        CognitoEvent request = createCognitoEvent(POST_CONFIRMATION, EMAIL1, USER1);
 
         // Invoke user creation
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
+        userService.handleRequest(request, context);
 
-        // Verify that the user was created successfully
-        assertEquals(201, response.getStatusCode());
-        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
-
-        // Try to create the same user again
-        response = userService.handleRequest(request, context);
-        assertEquals(500, response.getStatusCode());
-        assertEquals(ErrorCode.ERROR_PROCESSING_POST_REQUEST, response.getBody());
-
-        // Verify only single user with given credentials is present
-        int numUsers = jdbi.withHandle(handle -> {
-                return handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
-                        .bind("username", USER1)
-                        .bind("password", PASSWORD1)
-                        .mapTo(Integer.class)
-                        .findFirst()
-                        .orElse(0);
-                }
-        );
-        assertEquals(1, numUsers);
+        try {
+            // Creating same user again should throw exception
+            userService.handleRequest(request, context);
+            fail();
+        } catch(Exception e) {
+            // Verify only single user with given credentials is present
+            int numUsers = jdbi.withHandle(handle -> {
+                        return handle.createQuery("SELECT COUNT(*) FROM user WHERE UserID = :user_id AND Email = :email")
+                                .bind("user_id", USER1)
+                                .bind("email", EMAIL1)
+                                .mapTo(Integer.class)
+                                .findFirst()
+                                .orElse(0);
+                    }
+            );
+            assertEquals(1, numUsers);
+        }
     }
 
     @Test
-    public void testCreateUser_MultipleUsers() {
+    public void testCreateUser_Success_MultipleUsers() {
         // Inject the in-memory database connection into UserService
         UserService userService = new UserService(jdbi);
 
@@ -122,22 +118,14 @@ class UserServiceLocalIntegrationTests {
         when(context.getLogger()).thenReturn(new MockLambdaLogger());
 
         // Define request for user creation
-        APIGatewayProxyRequestEvent request = createUserRequest(POST, USER1, PASSWORD1);
+        CognitoEvent request = createCognitoEvent(POST_CONFIRMATION, EMAIL1, USER1);
 
         // Invoke user creation
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the user was created successfully
-        assertEquals(201, response.getStatusCode());
-        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
+        userService.handleRequest(request, context);
 
         // Create a different user
-        APIGatewayProxyRequestEvent request2 = createUserRequest(POST, USER2, PASSWORD1);
-        APIGatewayProxyResponseEvent response2 = userService.handleRequest(request2, context);
-
-        // Verify that the user was created successfully
-        assertEquals(201, response2.getStatusCode());
-        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response2.getBody());
+        CognitoEvent request2 = createCognitoEvent(POST_CONFIRMATION, EMAIL2, USER2);
+        userService.handleRequest(request2, context);
 
         // Verify two users are present
         int numUsers = jdbi.withHandle(handle -> {
@@ -150,109 +138,15 @@ class UserServiceLocalIntegrationTests {
         assertEquals(2, numUsers);
     }
 
-    @Test
-    public void testDeleteUser_Success() {
-        // Inject the in-memory database connection into UserService
-        UserService userService = new UserService(jdbi);
-
-        // Mock Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Define request for user creation
-        APIGatewayProxyRequestEvent request = createUserRequest(POST, USER1, PASSWORD1);
-
-        // Invoke user creation
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the user was created successfully
-        assertEquals(201, response.getStatusCode());
-        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
-
-        // Define request to delete created user
-        request.setHttpMethod(DELETE);
-
-        // Invoke deletion
-        response = userService.handleRequest(request, context);
-        assertEquals(200, response.getStatusCode());
-        assertEquals(ResponseMessage.USER_DELETED_SUCCESSFULLY, response.getBody());
-
-        // Verify user has been removed
-        boolean userExistsAndPasswordCorrect = jdbi.withHandle(handle ->
-                handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
-                        .bind("username", USER1)
-                        .bind("password", PASSWORD1)
-                        .mapTo(Integer.class)
-                        .findFirst()
-                        .orElse(0) > 0
-        );
-        assertFalse(userExistsAndPasswordCorrect);
-    }
-
-    @Test
-    public void testDeleteUser_UserNotFound() {
-        // Inject the in-memory database connection into UserService
-        UserService userService = new UserService(jdbi);
-
-        // Mock Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Define request for user deletion
-        APIGatewayProxyRequestEvent request = createUserRequest(DELETE, USER1, PASSWORD1);
-
-        // Invoke user deletion
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // User deletion fails due to user not existing
-        assertEquals(403, response.getStatusCode());
-        assertEquals(ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD, response.getBody());
-    }
-
-    @Test
-    public void testDeleteUser_WrongPassword() {
-        // Inject database connection into UserService
-        UserService userService = new UserService(jdbi);
-
-        // Mock Context
-        Context context = mock(Context.class);
-        when(context.getLogger()).thenReturn(new MockLambdaLogger());
-
-        // Define request for user creation
-        APIGatewayProxyRequestEvent request = createUserRequest(POST, USER1, PASSWORD1);
-
-        // Invoke user creation
-        APIGatewayProxyResponseEvent response = userService.handleRequest(request, context);
-
-        // Verify that the user was created successfully
-        assertEquals(201, response.getStatusCode());
-        assertEquals(ResponseMessage.USER_CREATED_SUCCESSFULLY, response.getBody());
-
-        // Define request to delete created user but with wrong password
-        request = createUserRequest(DELETE, USER1,PASSWORD2);
-
-        // Invoke deletion
-        response = userService.handleRequest(request, context);
-        assertEquals(403, response.getStatusCode());
-        assertEquals(ErrorCode.USER_NOT_FOUND_OR_INCORRECT_PASSWORD, response.getBody());
-
-        // Verify user has not been deleted
-        int numUsers = jdbi.withHandle(handle -> {
-                    return handle.createQuery("SELECT COUNT(*) FROM user WHERE username = :username AND password = :password")
-                            .bind("username", USER1)
-                            .bind("password", PASSWORD1)
-                            .mapTo(Integer.class)
-                            .findFirst()
-                            .orElse(0);
-                }
-        );
-        assertEquals(1, numUsers);
-    }
-
-    private APIGatewayProxyRequestEvent createUserRequest(String httpMethod, String username, String password) {
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setHttpMethod(httpMethod);
-        request.setBody(String.format("{\"username\":\"%s\",\"password\":\"%s\"}", username, password));
-        return request;
+    private CognitoEvent createCognitoEvent(String triggerSource, String email, String username) {
+        CognitoEvent cognitoEvent = new CognitoEvent();
+        cognitoEvent.setTriggerSource(triggerSource);
+        cognitoEvent.setUserName(username);
+        Request request = new Request();
+        Map<String, String> attributeMap = new HashMap<>();
+        attributeMap.put("email", email);
+        request.setUserAttributes(attributeMap);
+        cognitoEvent.setRequest(request);
+        return cognitoEvent;
     }
 }

@@ -137,6 +137,14 @@ Resources:
           DB_ENDPOINT_ADDRESS: !GetAtt MetaDataDB.Endpoint.Address
           DB_NAME: !Ref MetaDataDBName
           DB_SECRET_NAME: !Ref MetaDataDBCreds
+
+  UserServiceLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt UserServiceLambda.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt ImageProcessorUserPool.Arn
   ############################
 
   ###### Databases ###########
@@ -165,53 +173,15 @@ Resources:
     Properties:
       Name: ImageProcessorApi
 
-  UserResource:
-    Type: AWS::ApiGateway::Resource
+  ImageProcessorApiGatewayAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
     Properties:
+      Name: CognitoAuthorizer
+      Type: COGNITO_USER_POOLS
       RestApiId: !Ref ImageProcessorApiGateway
-      ParentId: !GetAtt ImageProcessorApiGateway.RootResourceId
-      PathPart: users
-
-  UserMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ImageProcessorApiGateway
-      ResourceId: !Ref UserResource
-      HttpMethod: ANY
-      RequestValidatorId: !Ref UserValidator
-      AuthorizationType: AWS_IAM
-      RequestModels:
-        application/json: !Ref UserModel
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Credentials: !GetAtt ApiGatewayIamRole.Arn
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserServiceLambda.Arn}/invocations"
-
-  UserValidator:
-    Type: AWS::ApiGateway::RequestValidator
-    Properties:
-      Name: UserValidator
-      RestApiId: !Ref ImageProcessorApiGateway
-      ValidateRequestBody: true
-      ValidateRequestParameters: true
-
-  UserModel:
-    Type: AWS::ApiGateway::Model
-    Properties:
-      RestApiId: !Ref ImageProcessorApiGateway
-      ContentType: "application/json"
-      Name: "UserModel"
-      Schema:
-        type: object
-        properties:
-          username:
-            type: string
-          password:
-            type: string
-        required:
-          - username
-          - password
+      IdentitySource: method.request.header.Auth
+      ProviderARNs:
+        - !GetAtt ImageProcessorUserPool.Arn
 
   ############################
 
@@ -284,6 +254,33 @@ Resources:
               - Effect: 'Allow'
                 Action: 'lambda:*'
                 Resource: !GetAtt UserServiceLambda.Arn
+  ############################
+
+  ###### Cognito ############
+  ImageProcessorUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: ImageProcessorUserPool
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      LambdaConfig:
+        PostConfirmation: !GetAtt UserServiceLambda.Arn
+
+  ImageProcessorUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: ImageProcessorUserPoolClient
+      GenerateSecret: false
+      UserPoolId: !Ref ImageProcessorUserPool
   ############################
 
 Outputs:

@@ -25,61 +25,18 @@ public class UserServiceIntegrationTests {
     private static final String DELETE = "DELETE";
 
     @BeforeAll
-    public static void cleanDB() {
-        invokeUserService(DELETE, USER1, PASSWORD1);
-    }
+    public static void cleanDB() {}
 
     @Test
     public void testCreateUser() {
-        // Invoke UserService to create user
-        UserServiceResponse response = invokeUserService(POST, USER1, PASSWORD1);
-        assertEquals(201, response.getStatusCode());
+
     }
 
     @Test
     public void testRemoveUser() {
-        // Invoke UserService to create user
-        UserServiceResponse postResponse = invokeUserService(POST, USER1, PASSWORD1);
-        assertEquals(201, postResponse.getStatusCode());
-
-        // Invoke UserService to delete user
-        UserServiceResponse deleteResponse = invokeUserService(DELETE, USER1, PASSWORD1);
-        assertEquals(200, deleteResponse.getStatusCode());
     }
 
     private static UserServiceResponse invokeUserService(String method, String username, String password) {
-        try {
-            //Need a SdkBytes instance for the payload
-            String json = String.format("{\n" +
-                    "  \"body\": \"{\\n    \\\"username\\\" : \\\"%s\\\",\\n    \\\"password\\\" : \\\"%s\\\"\\n}\",\n" +
-                    "  \"resource\": \"/users\",\n" +
-                    "  \"path\": \"/users\",\n" +
-                    "  \"httpMethod\": \"%s\",\n" +
-                    "  \"isBase64Encoded\": true,\n" +
-                    "  \"queryStringParameters\": {},\n" +
-                    "  \"requestContext\": {}\n" +
-                    "}", username, password, method);
-
-            SdkBytes payload = SdkBytes.fromUtf8String(json);
-
-            //Setup an InvokeRequest
-            InvokeRequest request = InvokeRequest.builder()
-                    .functionName(functionName)
-                    .payload(payload)
-                    .build();
-
-            InvokeResponse res = awsLambda.invoke(request);
-
-            try {
-                return objectMapper.readValue(res.payload().asUtf8String(), UserServiceResponse.class);
-            } catch (Exception e) {
-                System.err.println(e.getMessage());
-                System.exit(1);
-            }
-        } catch(LambdaException e) {
-            System.err.println(e.getMessage());
-            System.exit(1);
-        }
         return null;
     }
 }

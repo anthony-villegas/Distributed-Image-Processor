@@ -1,21 +1,20 @@
 package lambdas.actions;
 
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import lambdas.helpers.ErrorCode;
 import org.jdbi.v3.core.Jdbi;
+import schemas.CognitoEvent;
 import schemas.User;
 
 public interface UserAction {
-    APIGatewayProxyResponseEvent doAction(User user, Context context);
+    void doAction(User user, Context context);
 
-    static UserAction createAction(String httpMethod, Jdbi jdbi) {
-        switch (httpMethod) {
-            case "POST":
+    static UserAction createAction(CognitoEvent cognitoEvent, Jdbi jdbi) {
+        switch (cognitoEvent.getTriggerSource()) {
+            case "PostConfirmation_ConfirmSignUp":
                 return new CreateUserAction(jdbi);
-            case "DELETE":
-                return new DeleteUserAction(jdbi);
             default:
-                throw new IllegalArgumentException("Invalid HTTP method");
+                throw new IllegalArgumentException(ErrorCode.INVALID_EVENT_SOURCE);
         }
     }
 }

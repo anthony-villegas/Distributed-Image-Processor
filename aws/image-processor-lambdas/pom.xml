@@ -117,6 +117,7 @@
             <include>**/UserServiceLocalIntegrationTests.java</include>
             <!-- Add more include statements for additional unit test classes -->
           </includes>
+          <skipTests>false</skipTests>
         </configuration>
         <executions>
           <execution>
@@ -145,6 +146,7 @@
             <include>**/UserServiceIntegrationTests.java</include>
             <!-- Add more include statements for additional integration test classes -->
           </includes>
+          <skipTests>false</skipTests>
         </configuration>
       </plugin>
       <plugin>
