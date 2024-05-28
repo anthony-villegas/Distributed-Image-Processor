@@ -81,9 +81,15 @@
 
     <dependency>
       <groupId>org.jdbi</groupId>
-      <artifactId>jdbi3</artifactId>
-      <version>3.0.0-beta2</version>
+      <artifactId>jdbi3-core</artifactId>
+      <version>3.45.1</version>
     </dependency>
+    <dependency>
+      <groupId>org.jdbi</groupId>
+      <artifactId>jdbi3-sqlobject</artifactId>
+      <version>3.45.1</version>
+    </dependency>
+
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-rds</artifactId>
@@ -113,7 +119,6 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
-
   <build>
     <plugins>
       <!-- Maven Surefire Plugin for unit tests -->
@@ -127,6 +132,8 @@
             <include>**/UserServiceLocalIntegrationTests.java</include>
             <include>**/SignedUrlGeneratorUnitTests.java</include>
             <include>**/SignedUrlServiceUnitTests.java</include>
+            <include>**/UserDaoUnitTests.java</include>
+            <include>**/RequestDaoUnitTests.java</include>
             <!-- Add more include statements for additional unit test classes -->
           </includes>
           <skipTests>false</skipTests>

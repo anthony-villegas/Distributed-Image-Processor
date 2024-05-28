@@ -42,7 +42,6 @@ class UserServiceLocalIntegrationTests {
     @AfterEach
     public void cleanDB() {
         jdbi.useHandle(handle -> {
-            handle.execute("DELETE FROM image");
             handle.execute("DELETE FROM user");
         });
     }
@@ -64,7 +63,7 @@ class UserServiceLocalIntegrationTests {
 
         // Verify user is present in database
         boolean userExistsAndEmailCorrect = jdbi.withHandle(handle ->
-                handle.createQuery("SELECT COUNT(*) FROM user WHERE UserID = :user_id AND Email = :email")
+                handle.createQuery("SELECT COUNT(*) FROM user WHERE id = :user_id AND email = :email")
                         .bind("user_id", USER1)
                         .bind("email", EMAIL1)
                         .mapTo(Integer.class)
@@ -96,7 +95,7 @@ class UserServiceLocalIntegrationTests {
         } catch(Exception e) {
             // Verify only single user with given credentials is present
             int numUsers = jdbi.withHandle(handle -> {
-                        return handle.createQuery("SELECT COUNT(*) FROM user WHERE UserID = :user_id AND Email = :email")
+                        return handle.createQuery("SELECT COUNT(*) FROM user WHERE id = :user_id AND email = :email")
                                 .bind("user_id", USER1)
                                 .bind("email", EMAIL1)
                                 .mapTo(Integer.class)
