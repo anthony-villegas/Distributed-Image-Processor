@@ -28,7 +28,7 @@ public class UserDaoUnitTests {
     }
 
     @Test
-    public void UserDao_insertUserPositional_UserPresent() {
+    public void UserDao_insertUser_UserPresent() {
         UserBean user = jdbi.withExtension(UserDao.class, dao -> {
             dao.createTable();
 
