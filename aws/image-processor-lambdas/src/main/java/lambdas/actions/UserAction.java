@@ -4,10 +4,10 @@ import com.amazonaws.services.lambda.runtime.Context;
 import lambdas.helpers.ErrorCode;
 import org.jdbi.v3.core.Jdbi;
 import schemas.CognitoEvent;
-import schemas.User;
+import lambdas.beans.UserBean;
 
 public interface UserAction {
-    void doAction(User user, Context context);
+    void doAction(UserBean user, Context context);
 
     static UserAction createAction(CognitoEvent cognitoEvent, Jdbi jdbi) {
         switch (cognitoEvent.getTriggerSource()) {

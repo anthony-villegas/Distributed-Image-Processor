@@ -8,7 +8,7 @@ import lambdas.actions.UserAction;
 import lambdas.helpers.DatabaseCredentialsManager;
 import org.jdbi.v3.core.Jdbi;
 import schemas.CognitoEvent;
-import schemas.User;
+import lambdas.beans.UserBean;
 
 public class UserService implements RequestHandler<CognitoEvent, CognitoEvent>{
     private static Jdbi jdbi;
@@ -31,7 +31,7 @@ public class UserService implements RequestHandler<CognitoEvent, CognitoEvent>{
         try {
             context.getLogger().log("Handling CognitoEvent:\n" + cognitoEvent.toString());
             validateRequest(cognitoEvent);
-            User user = deserializeUser(cognitoEvent);
+            UserBean user = deserializeUser(cognitoEvent);
             UserAction userAction = UserAction.createAction(cognitoEvent, jdbi);
             userAction.doAction(user, context);
             return cognitoEvent;
@@ -57,10 +57,10 @@ public class UserService implements RequestHandler<CognitoEvent, CognitoEvent>{
         }
     }
 
-    private User deserializeUser(CognitoEvent cognitoEvent) {
-        User user = new User();
+    private UserBean deserializeUser(CognitoEvent cognitoEvent) {
+        UserBean user = new UserBean();
         user.setEmail(cognitoEvent.getRequest().getUserAttributes().get("email"));
-        user.setUserID(cognitoEvent.getUserName());
+        user.setId(cognitoEvent.getUserName());
         return user;
     }
 
