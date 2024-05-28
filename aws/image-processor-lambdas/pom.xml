@@ -132,6 +132,7 @@
             <include>**/UserServiceLocalIntegrationTests.java</include>
             <include>**/SignedUrlGeneratorUnitTests.java</include>
             <include>**/SignedUrlServiceUnitTests.java</include>
+            <include>**/UserDaoUnitTests.java</include>
             <!-- Add more include statements for additional unit test classes -->
           </includes>
           <skipTests>false</skipTests>
