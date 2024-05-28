@@ -7,8 +7,7 @@ import lambdas.daos.RequestDao;
 import lambdas.daos.UserDao;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.sql.Timestamp;
 import java.util.Arrays;
@@ -33,6 +32,23 @@ public class RequestDaoUnitTests {
         jdbi.useExtension(UserDao.class, dao -> {
             dao.createTable();
             dao.insertBean(user1);
+        });
+    }
+
+    @BeforeEach
+    public void resetRequestTable() {
+        // Reset the database state before each test
+        jdbi.useHandle(handle -> {
+            handle.execute("DROP TABLE IF EXISTS request");
+        });
+    }
+
+    @AfterAll
+    public static void resetDatabase() {
+        // Reset the database state before each test
+        jdbi.useHandle(handle -> {
+            handle.execute("DROP TABLE IF EXISTS request");
+            handle.execute("DROP TABLE IF EXISTS user");
         });
     }
 

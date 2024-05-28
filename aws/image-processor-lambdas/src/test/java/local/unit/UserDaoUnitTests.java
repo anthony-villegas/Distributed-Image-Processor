@@ -5,8 +5,7 @@ import lambdas.beans.UserBean;
 import lambdas.daos.UserDao;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.sql.Timestamp;
 import java.util.Arrays;
@@ -25,6 +24,22 @@ public class UserDaoUnitTests {
         // Initialize Jdbi with the H2 database
         jdbi = Jdbi.create(dataSource);
         jdbi.installPlugin(new SqlObjectPlugin());
+    }
+
+    @AfterAll
+    public static void resetDatabase() {
+        // Reset the database state before each test
+        jdbi.useHandle(handle -> {
+            handle.execute("DROP TABLE IF EXISTS user");
+        });
+    }
+
+    @AfterEach
+    public void resetUserTable() {
+        // Reset the database state before each test
+        jdbi.useHandle(handle -> {
+            handle.execute("DROP TABLE IF EXISTS user");
+        });
     }
 
     @Test
