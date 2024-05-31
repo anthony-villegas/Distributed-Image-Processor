@@ -9,6 +9,7 @@ import lambdas.daos.SourceImageDao;
 import lambdas.daos.UserDao;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -54,10 +55,20 @@ public class SourceImageDaoUnitTests {
     }
 
     @AfterEach
-    public void resetDatabase() {
+    public void resetTable() {
         // Reset the database state before each test
         jdbi.useHandle(handle -> {
             handle.execute("DROP TABLE IF EXISTS source_image");
+        });
+    }
+
+    @AfterAll
+    public static void resetDatabase() {
+        // Reset the database state before each test
+        jdbi.useHandle(handle -> {
+            handle.execute("DROP TABLE IF EXISTS source_image");
+            handle.execute("DROP TABLE IF EXISTS request");
+            handle.execute("DROP TABLE IF EXISTS user");
         });
     }
 
