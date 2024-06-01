@@ -135,6 +135,7 @@
             <include>**/UserDaoUnitTests.java</include>
             <include>**/RequestDaoUnitTests.java</include>
             <include>**/SourceImageDaoUnitTests.java</include>
+            <include>**/ProcessingTaskDaoUnitTests.java</include>
             <!-- Add more include statements for additional unit test classes -->
           </includes>
           <skipTests>false</skipTests>
