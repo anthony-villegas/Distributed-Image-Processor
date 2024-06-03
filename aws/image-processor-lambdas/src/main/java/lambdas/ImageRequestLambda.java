@@ -8,11 +8,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
+import lambdas.beans.ProcessingTaskBean;
 import lambdas.beans.RequestBean;
+import lambdas.daos.ProcessingTaskDao;
 import lambdas.daos.RequestDao;
+import lambdas.daos.SourceImageDao;
 import lambdas.helpers.DatabaseCredentialsManager;
 import org.jdbi.v3.core.Jdbi;
 
+import java.sql.Timestamp;
 import java.util.Base64;
 
 import static lambdas.UserService.initializeHikari;
@@ -22,7 +26,7 @@ import static lambdas.helpers.ResponseMessage.IMAGE_PROCESSING_REQUEST_HAS_BEEN_
 
 public class ImageRequestLambda implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private static Jdbi jdbi;
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
     public ImageRequestLambda(Jdbi jdbi, ObjectMapper objectMapper) {
         ImageRequestLambda.jdbi = jdbi;
@@ -52,11 +56,15 @@ public class ImageRequestLambda implements RequestHandler<APIGatewayProxyRequest
     }
 
     private void processRequest(APIGatewayProxyRequestEvent request) throws JsonProcessingException {
-        String userId = extractUserIdFromJwt(request.getHeaders().get("Auth"));
-
+        String userId = extractUserIdFromJwt(request.getHeaders().get("Authorization"));
+        JsonNode imageRequest = deserializeImageRequest(request.getBody());
+        String imageId = imageRequest.path("imageId").asText();
+        ProcessingTaskBean.Action action = ProcessingTaskBean.Action.valueOf(imageRequest.path("action").asText());
 
         int requestId = insertRequest(userId);
-
+        insertSourceImage(imageId, requestId);
+        insertProcessingTask(imageId, action);
+        queueToSqs(requestId);
     }
 
     public String extractUserIdFromJwt(String jwt) throws JsonProcessingException {
@@ -71,6 +79,10 @@ public class ImageRequestLambda implements RequestHandler<APIGatewayProxyRequest
         return new String(decoder.decode(chunks[1]));
     }
 
+    private JsonNode deserializeImageRequest(String body) throws JsonProcessingException {
+        return objectMapper.readTree(body);
+    }
+
     private int insertRequest(String userId) {
         return jdbi.withExtension(RequestDao.class, dao -> {
             dao.createTable();
@@ -78,15 +90,26 @@ public class ImageRequestLambda implements RequestHandler<APIGatewayProxyRequest
         });
     }
 
-    private void insertSourceImage() {
-
+    private void insertSourceImage(String imageId, int requestId) {
+        jdbi.useExtension(SourceImageDao.class, dao -> {
+            dao.createTable();
+            dao.insert(imageId, requestId);
+        });
     }
 
-    private void insertProcessingTask() {
-
+    private void insertProcessingTask(String imageId, ProcessingTaskBean.Action action) {
+        ProcessingTaskBean task = new ProcessingTaskBean();
+        task.setImageId(imageId);
+        task.setStatus(ProcessingTaskBean.Status.QUEUED);
+        task.setRetries(0);
+        task.setQueuedAt(new Timestamp(System.currentTimeMillis()));
+        task.setAction(action);
+        jdbi.useExtension(ProcessingTaskDao.class, dao -> {
+            dao.createTable();;
+            dao.insert(task);
+        });
     }
 
-    private void queueToSqs() {
-
+    private void queueToSqs(int requestId) {
     }
 }
