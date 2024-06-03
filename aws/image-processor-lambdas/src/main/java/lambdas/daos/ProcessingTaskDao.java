@@ -20,14 +20,15 @@ public interface ProcessingTaskDao {
             "queuedAt TIMESTAMP, " +
             "startedAt TIMESTAMP, " +
             "finishedAt TIMESTAMP, " +
+            "action ENUM('resize'), " +
             "FOREIGN KEY (imageId) REFERENCES source_image(id) " +
             "ON DELETE CASCADE " +
             "ON UPDATE CASCADE" +
             ");")
     void createTable();
 
-    @SqlUpdate("INSERT INTO processing_task (imageId, status, retries, result, queuedAt, startedAt, finishedAt) " +
-            "VALUES (:imageId, :status, :retries, :result, :queuedAt, :startedAt, :finishedAt)")
+    @SqlUpdate("INSERT INTO processing_task (imageId, status, retries, result, queuedAt, startedAt, finishedAt, action) " +
+            "VALUES (:imageId, :status, :retries, :result, :queuedAt, :startedAt, :finishedAt, :action)")
     @GetGeneratedKeys("id")
     int insert(@BindBean ProcessingTaskBean task);
 
@@ -37,7 +38,8 @@ public interface ProcessingTaskDao {
             "result = :result, " +
             "queuedAt = :queuedAt, " +
             "startedAt = :startedAt, " +
-            "finishedAt = :finishedAt " +
+            "finishedAt = :finishedAt, " +
+            "action = :action " +
             "WHERE id = :id")
     void update(@BindBean ProcessingTaskBean task);
 
@@ -49,4 +51,3 @@ public interface ProcessingTaskDao {
     @RegisterBeanMapper(ProcessingTaskBean.class)
     List<ProcessingTaskBean> listProcessingTasksByImageId(@Bind("imageId") String imageId);
 }
-
