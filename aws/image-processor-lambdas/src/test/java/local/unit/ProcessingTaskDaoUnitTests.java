@@ -77,6 +77,7 @@ public class ProcessingTaskDaoUnitTests {
         task.setStatus(ProcessingTaskBean.Status.QUEUED);
         task.setRetries(0);
         task.setQueuedAt(new Timestamp(System.currentTimeMillis()));
+        task.setAction(ProcessingTaskBean.Action.RESIZE);
 
         int taskId = jdbi.withExtension(ProcessingTaskDao.class, dao -> {
             dao.createTable();
@@ -90,6 +91,7 @@ public class ProcessingTaskDaoUnitTests {
         assertEquals(task.getImageId(), retrievedTask.getImageId());
         assertEquals(task.getStatus(), retrievedTask.getStatus());
         assertEquals(task.getRetries(), retrievedTask.getRetries());
+        assertEquals(task.getAction(), retrievedTask.getAction());
     }
 
     @Test
@@ -99,6 +101,7 @@ public class ProcessingTaskDaoUnitTests {
         task.setStatus(ProcessingTaskBean.Status.QUEUED);
         task.setRetries(0);
         task.setQueuedAt(new Timestamp(System.currentTimeMillis()));
+        task.setAction(ProcessingTaskBean.Action.RESIZE);
 
         int taskId = jdbi.withExtension(ProcessingTaskDao.class, dao -> {
             dao.createTable();
@@ -128,6 +131,7 @@ public class ProcessingTaskDaoUnitTests {
         task1.setStatus(ProcessingTaskBean.Status.QUEUED);
         task1.setRetries(0);
         task1.setQueuedAt(new Timestamp(System.currentTimeMillis()));
+        task1.setAction(ProcessingTaskBean.Action.RESIZE);
         task1.setId(1);
 
         ProcessingTaskBean task2 = new ProcessingTaskBean();
@@ -135,6 +139,7 @@ public class ProcessingTaskDaoUnitTests {
         task2.setStatus(ProcessingTaskBean.Status.QUEUED);
         task2.setRetries(0);
         task2.setQueuedAt(new Timestamp(System.currentTimeMillis()));
+        task2.setAction(ProcessingTaskBean.Action.RESIZE);
         task2.setId(2);
 
         List<ProcessingTaskBean> tasks = jdbi.withExtension(ProcessingTaskDao.class, dao -> {

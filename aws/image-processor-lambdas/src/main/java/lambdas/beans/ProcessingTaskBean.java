@@ -12,6 +12,7 @@ public class ProcessingTaskBean {
     private Timestamp queuedAt;
     private Timestamp startedAt;
     private Timestamp finishedAt;
+    private Action action;
 
     public enum Status {
         QUEUED("queued"),
@@ -42,6 +43,34 @@ public class ProcessingTaskBean {
                 }
             }
             throw new IllegalArgumentException("Unknown status: " + status);
+        }
+    }
+
+    public enum Action {
+        RESIZE("resize");
+
+        private final String action;
+
+        Action(String action) {
+            this.action = action;
+        }
+
+        public String getAction() {
+            return action;
+        }
+
+        @Override
+        public String toString() {
+            return this.action;
+        }
+
+        public static Action fromString(String action) {
+            for (Action a : Action.values()) {
+                if (a.action.equalsIgnoreCase(action)) {
+                    return a;
+                }
+            }
+            throw new IllegalArgumentException("Unknown action: " + action);
         }
     }
 
@@ -76,6 +105,7 @@ public class ProcessingTaskBean {
     public Timestamp getStartedAt() {
         return startedAt;
     }
+    public Action getAction() { return action; }
 
     public void setFinishedAt(Timestamp finishedAt) {
         this.finishedAt = finishedAt;
@@ -108,6 +138,7 @@ public class ProcessingTaskBean {
     public void setStatus(Status status) {
         this.status = status;
     }
+    public void setAction(Action action) { this.action = action; }
 
     @Override
     public boolean equals(Object o) {
@@ -121,12 +152,13 @@ public class ProcessingTaskBean {
                 Objects.equals(result, that.result) &&
                 Objects.equals(queuedAt, that.queuedAt) &&
                 Objects.equals(startedAt, that.startedAt) &&
-                Objects.equals(finishedAt, that.finishedAt);
+                Objects.equals(finishedAt, that.finishedAt) &&
+                action == that.action;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, imageId, status, retries, result, queuedAt, startedAt, finishedAt);
+        return Objects.hash(id, imageId, status, retries, result, queuedAt, startedAt, finishedAt, action);
     }
 
     @Override
@@ -140,6 +172,7 @@ public class ProcessingTaskBean {
                 ", queuedAt=" + queuedAt +
                 ", startedAt=" + startedAt +
                 ", finishedAt=" + finishedAt +
+                ", action=" + action +
                 '}';
     }
 }
