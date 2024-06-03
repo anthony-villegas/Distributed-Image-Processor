@@ -64,7 +64,7 @@ public class UserService implements RequestHandler<CognitoEvent, CognitoEvent>{
         return user;
     }
 
-    private static HikariDataSource initializeHikari(DatabaseCredentialsManager.Credentials credentials, String dbEndpoint, String dbName) {
+    public static HikariDataSource initializeHikari(DatabaseCredentialsManager.Credentials credentials, String dbEndpoint, String dbName) {
         // Initialize HikariDataSource
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl("jdbc:mysql://" + dbEndpoint + ":3306/" + dbName);
